@@ -1,0 +1,33 @@
+import { Router } from 'express';
+import { body } from 'express-validator';
+import { register, login, getMe, refreshToken, verifyEmail, resendOtp } from '../controllers/auth';
+import { protect } from '../middleware/auth';
+
+const router = Router();
+
+router.post(
+  '/register',
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('username').trim().notEmpty().isAlphanumeric().withMessage('Username must be alphanumeric'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  ],
+  register
+);
+
+router.post(
+  '/login',
+  [
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('password').notEmpty().withMessage('Password is required'),
+  ],
+  login
+);
+
+router.post('/verify-email', verifyEmail);
+router.post('/resend-otp', resendOtp);
+router.post('/refresh-token', refreshToken);
+router.get('/me', protect, getMe);
+
+export default router;
