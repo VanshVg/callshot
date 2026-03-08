@@ -2,36 +2,30 @@ import { useState, FormEvent } from 'react';
 import { Modal } from '../common/Modal';
 import { Input } from '../common/Input';
 import { Button } from '../common/Button';
-import { joinGroup } from '../../services/groups';
-import type { Group } from '../../types/index';
+import { useJoinGroupMutation } from '../../store/api';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onJoined: (group: Group) => void;
 }
 
-export const JoinGroupModal = ({ open, onClose, onJoined }: Props) => {
+export const JoinGroupModal = ({ open, onClose }: Props) => {
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [joinGroup, { isLoading }] = useJoinGroupMutation();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!inviteCode.trim()) { setError('Please enter an invite code'); return; }
-
-    setLoading(true);
     setError('');
     try {
-      const group = await joinGroup(inviteCode.trim().toUpperCase());
-      onJoined(group);
+      await joinGroup(inviteCode.trim().toUpperCase()).unwrap();
+      // RTK invalidates MyGroups tag — Dashboard list auto-refreshes
       setInviteCode('');
       onClose();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Invalid invite code';
+      const msg = (err as { data?: { message?: string } })?.data?.message || 'Invalid invite code';
       setError(msg);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -58,12 +52,8 @@ export const JoinGroupModal = ({ open, onClose, onJoined }: Props) => {
         />
 
         <div className="flex gap-3 mt-2">
-          <Button type="button" variant="secondary" fullWidth onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" fullWidth loading={loading}>
-            Join Group
-          </Button>
+          <Button type="button" variant="secondary" fullWidth onClick={onClose}>Cancel</Button>
+          <Button type="submit" fullWidth loading={isLoading}>Join Group</Button>
         </div>
       </form>
     </Modal>

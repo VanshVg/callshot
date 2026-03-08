@@ -38,6 +38,9 @@ export interface Group {
   members: { _id: string; name: string; username: string }[];
   tournament: Tournament;
   status: 'draft' | 'active' | 'completed';
+  visibility: 'public' | 'private';
+  maxMembers: number;
+  enabledCategories: Category[];
 }
 
 export interface Pick {
@@ -55,6 +58,14 @@ export interface Prediction {
   locked: boolean;
 }
 
+// Prediction with populated user — returned by the "all members" endpoint
+export interface GroupPrediction {
+  _id: string;
+  user: { _id: string; name: string; username: string };
+  picks: { category: { _id: string; name: string; type: string }; selections: string[] }[];
+  submittedAt: string;
+}
+
 export interface Card {
   type: 'swap' | 'joker';
   used: boolean;
@@ -65,6 +76,15 @@ export interface Card {
 export interface StrategyCards {
   _id: string;
   cards: Card[];
+}
+
+export interface Notification {
+  _id: string;
+  group: { _id: string; name: string };
+  message: string;
+  type: 'categories_updated';
+  read: boolean;
+  createdAt: string;
 }
 
 export interface LeaderboardEntry {

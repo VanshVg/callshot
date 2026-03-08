@@ -7,9 +7,10 @@ import { Register } from './pages/Register';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Dashboard } from './pages/Dashboard';
 import { GroupDetail } from './pages/GroupDetail';
+import { Predictions } from './pages/Predictions';
+import { GroupPredictions } from './pages/GroupPredictions';
 
-// Phase 4+ stubs
-const Predictions = () => <div>Predictions</div>;
+// Phase 5+ stubs
 const Leaderboard = () => <div>Leaderboard</div>;
 const Admin = () => <div>Admin</div>;
 
@@ -39,6 +40,7 @@ const AppRoutes = () => {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/groups/:id" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
       <Route path="/groups/:groupId/predictions" element={<ProtectedRoute><Predictions /></ProtectedRoute>} />
+      <Route path="/groups/:groupId/predictions/all" element={<ProtectedRoute><GroupPredictions /></ProtectedRoute>} />
       <Route path="/groups/:groupId/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
 

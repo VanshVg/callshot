@@ -36,7 +36,11 @@ router.post(
 
     const existing = await Prediction.findOne({ user: req.user!.id, group: groupId, tournament: tournamentId });
     if (existing) {
-      res.status(409).json({ message: 'Prediction already submitted. Use strategy cards to make changes.' });
+      // Update existing prediction — allowed until tournament starts
+      existing.picks = picks as any;
+      existing.submittedAt = new Date();
+      await existing.save();
+      res.json({ prediction: existing });
       return;
     }
 
@@ -48,7 +52,7 @@ router.post(
       locked: false,
     });
 
-    // Initialise 4 strategy cards
+    // Initialise 4 strategy cards on first submission
     await StrategyCard.create({
       user: req.user!.id,
       group: groupId,

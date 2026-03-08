@@ -34,7 +34,7 @@ export const Modal = ({ open, onClose, title, children }: ModalProps) => {
           <h2 className="text-white font-semibold text-lg">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-[#2A2A2A]"
+            className="text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-[#2A2A2A] cursor-pointer"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

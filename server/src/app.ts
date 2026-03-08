@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
 import { connectDB } from './config/db';
 import { BRAND } from './constants/brand';
+import { initSocket } from './socket';
 
 import authRoutes from './routes/auth';
 import groupRoutes from './routes/groups';
@@ -11,13 +13,14 @@ import predictionRoutes from './routes/predictions';
 import cardRoutes from './routes/cards';
 import leaderboardRoutes from './routes/leaderboard';
 import adminRoutes from './routes/admin';
+import notificationRoutes from './routes/notifications';
 
 const app = express();
 
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map((o) => o.trim());
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // curl / same-origin via Vite proxy
+    if (!origin) return cb(null, true);
     const isAllowed =
       allowedOrigins.includes(origin) ||
       /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(origin);
@@ -38,6 +41,7 @@ app.use('/api/predictions', predictionRoutes);
 app.use('/api/cards', cardRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Route not found' });
@@ -45,9 +49,14 @@ app.use((_req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
+const httpServer = createServer(app);
+initSocket(httpServer, allowedOrigins);
+
 connectDB()
   .then(() => {
-    app.listen(Number(PORT), '0.0.0.0', () => console.log(`${BRAND.name} server running on http://0.0.0.0:${PORT}`));
+    httpServer.listen(Number(PORT), '0.0.0.0', () =>
+      console.log(`${BRAND.name} server running on http://0.0.0.0:${PORT}`)
+    );
   })
   .catch((err) => {
     console.error('DB connection failed:', err);
