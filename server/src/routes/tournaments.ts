@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Tournament, Category } from '../models/index';
-import { IPL_PLAYERS, IPL_TEAMS } from '../constants/ipl';
+import { IPL_PLAYERS, IPL_SQUADS, IPL_TEAMS } from '../constants/ipl';
 
 const router = Router();
 
@@ -27,8 +27,17 @@ router.get('/:id/options', async (req: Request, res: Response) => {
     res.status(404).json({ message: 'Tournament not found' });
     return;
   }
-  // Currently only IPL is supported; extend here for other tournament types
-  res.json({ players: IPL_PLAYERS, teams: IPL_TEAMS });
+
+  // Use DB-stored teams/squads if present, otherwise fall back to IPL constants
+  const teams = tournament.teams.length > 0 ? tournament.teams : IPL_TEAMS;
+  const squadsMap: Record<string, string[]> =
+    tournament.squads && tournament.squads.size > 0
+      ? Object.fromEntries(tournament.squads)
+      : IPL_SQUADS;
+
+  const players = Array.from(new Set(Object.values(squadsMap).flat())).sort();
+
+  res.json({ players, teams, squads: squadsMap });
 });
 
 export default router;

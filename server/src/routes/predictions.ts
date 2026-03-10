@@ -60,8 +60,8 @@ router.post(
       cards: [
         { type: 'swap', used: false, usedAt: null, details: null },
         { type: 'swap', used: false, usedAt: null, details: null },
-        { type: 'joker', used: false, usedAt: null, details: null },
-        { type: 'joker', used: false, usedAt: null, details: null },
+        { type: 'swap', used: false, usedAt: null, details: null },
+        { type: 'swap', used: false, usedAt: null, details: null },
       ],
     });
 

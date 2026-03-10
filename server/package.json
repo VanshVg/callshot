@@ -7,7 +7,8 @@
     "dev": "nodemon",
     "build": "tsc",
     "start": "node dist/app.js",
-    "seed": "ts-node src/seed/ipl.ts"
+    "seed": "ts-node src/seed/ipl.ts",
+    "fix:pot": "ts-node src/seed/fixPOT.ts"
   },
   "keywords": [],
   "author": "",

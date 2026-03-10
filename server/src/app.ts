@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { connectDB } from './config/db';
 import { BRAND } from './constants/brand';
 import { initSocket } from './socket';
+import { Match } from './models/index';
 
 import authRoutes from './routes/auth';
 import groupRoutes from './routes/groups';
@@ -14,6 +15,7 @@ import cardRoutes from './routes/cards';
 import leaderboardRoutes from './routes/leaderboard';
 import adminRoutes from './routes/admin';
 import notificationRoutes from './routes/notifications';
+import matchRoutes from './routes/matches';
 
 const app = express();
 
@@ -42,6 +44,7 @@ app.use('/api/cards', cardRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/matches', matchRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Route not found' });
@@ -54,9 +57,23 @@ initSocket(httpServer, allowedOrigins);
 
 connectDB()
   .then(() => {
-    httpServer.listen(Number(PORT), '0.0.0.0', () =>
-      console.log(`${BRAND.name} server running on http://0.0.0.0:${PORT}`)
-    );
+    httpServer.listen(Number(PORT), '0.0.0.0', () => {
+      console.log(`${BRAND.name} server running on http://0.0.0.0:${PORT}`);
+
+      // Auto-update match statuses every minute: upcoming → live
+      setInterval(async () => {
+        try {
+          const updated = await Match.updateMany(
+            { status: 'upcoming', scheduledAt: { $lte: new Date() } },
+            { $set: { status: 'live' } }
+          );
+          if (updated.modifiedCount > 0)
+            console.log(`[scheduler] ${updated.modifiedCount} match(es) set to live`);
+        } catch (err) {
+          console.error('[scheduler] Match status update error:', err);
+        }
+      }, 60 * 1000);
+    });
   })
   .catch((err) => {
     console.error('DB connection failed:', err);

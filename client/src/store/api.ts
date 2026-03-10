@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { Category, Group, Tournament, Prediction, GroupPrediction, Notification } from '../types/index';
+import type { Category, Group, Tournament, Prediction, GroupPrediction, Notification, Match, MatchPrediction, MatchPicks, LeaderboardEntry, ActualResult, StrategyCards } from '../types/index';
 
 export const api = createApi({
   reducerPath: 'api',
@@ -11,7 +11,7 @@ export const api = createApi({
       return headers;
     },
   }),
-  tagTypes: ['MyGroups', 'Group', 'PublicGroups', 'Notification', 'Prediction'],
+  tagTypes: ['MyGroups', 'Group', 'PublicGroups', 'Notification', 'Prediction', 'Cards', 'Match', 'MatchPrediction', 'Leaderboard', 'ActualResult', 'AdminTournament'],
   endpoints: (builder) => ({
 
     // ── Groups ────────────────────────────────────────────────────────────────
@@ -36,7 +36,8 @@ export const api = createApi({
 
     createGroup: builder.mutation<Group, {
       name: string; description: string; tournamentId: string;
-      visibility: 'public' | 'private'; maxMembers: number; enabledCategories: string[];
+      visibility: 'public' | 'private'; maxMembers: number;
+      enabledCategories: string[]; enableMatchPredictions: boolean;
     }>({
       query: (body) => ({ url: '/groups', method: 'POST', body }),
       transformResponse: (res: { group: Group }) => res.group,
@@ -45,7 +46,7 @@ export const api = createApi({
 
     updateGroup: builder.mutation<Group, { id: string; body: {
       name?: string; description?: string; visibility?: 'public' | 'private';
-      maxMembers?: number; enabledCategories?: string[];
+      maxMembers?: number; enabledCategories?: string[]; enableMatchPredictions?: boolean;
     } }>({
       query: ({ id, body }) => ({ url: `/groups/${id}`, method: 'PUT', body }),
       transformResponse: (res: { group: Group }) => res.group,
@@ -81,7 +82,7 @@ export const api = createApi({
       transformResponse: (res: { categories: Category[] }) => res.categories,
     }),
 
-    getTournamentOptions: builder.query<{ players: string[]; teams: string[] }, string>({
+    getTournamentOptions: builder.query<{ players: string[]; teams: string[]; squads: Record<string, string[]> }, string>({
       query: (id) => `/tournaments/${id}/options`,
     }),
 
@@ -121,6 +122,43 @@ export const api = createApi({
       ],
     }),
 
+    // ── Strategy Cards ────────────────────────────────────────────────────────
+
+    getMyCards: builder.query<StrategyCards | null, { groupId: string; tournamentId: string }>({
+      queryFn: async ({ groupId, tournamentId }, _api, _extra, baseQuery) => {
+        const result = await baseQuery(`/cards/${groupId}/${tournamentId}`);
+        if (result.error) {
+          if ((result.error as { status: number }).status === 404) return { data: null };
+          return { error: result.error };
+        }
+        return { data: (result.data as { cards: StrategyCards }).cards };
+      },
+      providesTags: (_res, _err, { groupId, tournamentId }) => [
+        { type: 'Cards', id: `${groupId}-${tournamentId}` },
+      ],
+    }),
+
+    swapCard: builder.mutation<{ prediction: Prediction; cards: StrategyCards }, {
+      groupId: string; tournamentId: string;
+      categoryId: string; oldSelection: string; newSelection: string;
+    }>({
+      query: (body) => ({ url: '/cards/swap', method: 'POST', body }),
+      invalidatesTags: (_res, _err, { groupId, tournamentId }) => [
+        { type: 'Cards', id: `${groupId}-${tournamentId}` },
+        { type: 'Prediction', id: `${groupId}-${tournamentId}` },
+      ],
+    }),
+
+    jokerCard: builder.mutation<{ cards: StrategyCards }, {
+      groupId: string; tournamentId: string;
+      categoryId: string; player: string; predictedPosition: number;
+    }>({
+      query: (body) => ({ url: '/cards/joker', method: 'POST', body }),
+      invalidatesTags: (_res, _err, { groupId, tournamentId }) => [
+        { type: 'Cards', id: `${groupId}-${tournamentId}` },
+      ],
+    }),
+
     // ── Notifications ─────────────────────────────────────────────────────────
 
     getNotifications: builder.query<Notification[], void>({
@@ -141,10 +179,157 @@ export const api = createApi({
       },
     }),
 
+    // ── Matches ───────────────────────────────────────────────────────────────
+
+    getMatches: builder.query<Match[], string>({
+      query: (tournamentId) => `/matches?tournamentId=${tournamentId}`,
+      transformResponse: (res: { matches: Match[] }) => res.matches,
+      providesTags: ['Match'],
+    }),
+
+    createMatch: builder.mutation<Match, {
+      tournamentId: string; matchNumber: number; teamA: string; teamB: string;
+      venue?: string; scheduledAt: string;
+    }>({
+      query: (body) => ({ url: '/matches', method: 'POST', body }),
+      transformResponse: (res: { match: Match }) => res.match,
+      invalidatesTags: ['Match'],
+    }),
+
+    updateMatch: builder.mutation<Match, { id: string; body: {
+      status?: 'upcoming' | 'live' | 'completed';
+      teamA?: string; teamB?: string; venue?: string; scheduledAt?: string;
+      result?: {
+        winner?: string; topBatter?: string[]; topBowler?: string[];
+        playerOfMatch?: string[]; powerplayScoreA?: number; powerplayScoreB?: number;
+      };
+    } }>({
+      query: ({ id, body }) => ({ url: `/matches/${id}`, method: 'PUT', body }),
+      transformResponse: (res: { match: Match }) => res.match,
+      invalidatesTags: ['Match', 'MatchPrediction'],
+    }),
+
+    getMyMatchPrediction: builder.query<MatchPrediction | null, { matchId: string; groupId: string }>({
+      queryFn: async ({ matchId, groupId }, _api, _extra, baseQuery) => {
+        const result = await baseQuery(`/matches/${matchId}/my-prediction?groupId=${groupId}`);
+        if (result.error) {
+          if ((result.error as { status: number }).status === 404) return { data: null };
+          return { error: result.error };
+        }
+        return { data: (result.data as { prediction: MatchPrediction }).prediction };
+      },
+      providesTags: (_res, _err, { matchId, groupId }) => [
+        { type: 'MatchPrediction', id: `${matchId}-${groupId}` },
+      ],
+    }),
+
+    submitMatchPrediction: builder.mutation<MatchPrediction, {
+      matchId: string; groupId: string; picks: MatchPicks;
+    }>({
+      query: ({ matchId, groupId, picks }) => ({
+        url: `/matches/${matchId}/predict`,
+        method: 'POST',
+        body: { groupId, picks },
+      }),
+      transformResponse: (res: { prediction: MatchPrediction }) => res.prediction,
+      invalidatesTags: (_res, _err, { matchId, groupId }) => [
+        { type: 'MatchPrediction', id: `${matchId}-${groupId}` },
+      ],
+    }),
+
+    getMatchPredictions: builder.query<MatchPrediction[], { matchId: string; groupId: string }>({
+      query: ({ matchId, groupId }) => `/matches/${matchId}/predictions?groupId=${groupId}`,
+      transformResponse: (res: { predictions: MatchPrediction[] }) => res.predictions,
+      providesTags: (_res, _err, { matchId }) => [{ type: 'MatchPrediction', id: matchId }],
+    }),
+
+    // ── Leaderboard ───────────────────────────────────────────────────────────
+
+    getLeaderboard: builder.query<{
+      standings: LeaderboardEntry[];
+      totalParticipants: number;
+      predictionsSubmitted: number;
+    }, { groupId: string; tournamentId: string }>({
+      query: ({ groupId, tournamentId }) => `/leaderboard/${groupId}/${tournamentId}`,
+      providesTags: ['Leaderboard'],
+    }),
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
+    getAdminTournaments: builder.query<Tournament[], void>({
+      query: () => '/admin/tournaments',
+      transformResponse: (res: { tournaments: Tournament[] }) => res.tournaments,
+      providesTags: ['AdminTournament'],
+    }),
+
+    createAdminTournament: builder.mutation<Tournament, {
+      name: string; sport?: string; type: string; season: string;
+      totalMatches: number; startDate: string; endDate: string;
+    }>({
+      query: (body) => ({ url: '/admin/tournaments', method: 'POST', body }),
+      transformResponse: (res: { tournament: Tournament }) => res.tournament,
+      invalidatesTags: ['AdminTournament'],
+    }),
+
+    updateAdminTournament: builder.mutation<Tournament, { id: string; body: {
+      name?: string; sport?: string; type?: string; season?: string;
+      totalMatches?: number; startDate?: string; endDate?: string;
+    } }>({
+      query: ({ id, body }) => ({ url: `/admin/tournaments/${id}`, method: 'PUT', body }),
+      transformResponse: (res: { tournament: Tournament }) => res.tournament,
+      invalidatesTags: ['AdminTournament'],
+    }),
+
+    updateTournamentSquads: builder.mutation<Tournament, { id: string; teams: string[]; squads: Record<string, string[]> }>({
+      query: ({ id, teams, squads }) => ({ url: `/admin/tournaments/${id}/squads`, method: 'PUT', body: { teams, squads } }),
+      transformResponse: (res: { tournament: Tournament }) => res.tournament,
+      invalidatesTags: ['AdminTournament'],
+    }),
+
+    createAdminMatch: builder.mutation<Match, {
+      tournamentId: string; matchNumber: number; teamA: string; teamB: string;
+      venue?: string; scheduledAt: string;
+    }>({
+      query: (body) => ({ url: '/admin/matches', method: 'POST', body }),
+      transformResponse: (res: { match: Match }) => res.match,
+      invalidatesTags: ['Match'],
+    }),
+
+    bulkCreateMatches: builder.mutation<{ count: number }, {
+      tournamentId: string;
+      matches: { matchNumber: number; teamA: string; teamB: string; venue?: string; scheduledAt: string }[];
+    }>({
+      query: (body) => ({ url: '/admin/matches/bulk', method: 'POST', body }),
+      invalidatesTags: ['Match'],
+    }),
+
+    deleteAdminMatch: builder.mutation<void, string>({
+      query: (id) => ({ url: `/admin/matches/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Match'],
+    }),
+
+    getAdminResults: builder.query<ActualResult[], string>({
+      query: (tournamentId) => `/admin/results/${tournamentId}`,
+      transformResponse: (res: { results: ActualResult[] }) => res.results,
+      providesTags: ['ActualResult'],
+    }),
+
+    setTournamentStatus: builder.mutation<void, { id: string; status: string }>({
+      query: ({ id, status }) => ({ url: `/admin/tournaments/${id}/status`, method: 'PUT', body: { status } }),
+    }),
+
+    setActualResult: builder.mutation<void, { tournamentId: string; categoryId: string; rankings: { position: number; name: string }[] }>({
+      query: (body) => ({ url: '/admin/results', method: 'POST', body }),
+      invalidatesTags: ['ActualResult', 'Leaderboard'],
+    }),
+
   }),
 });
 
 export const {
+  useGetMyCardsQuery,
+  useSwapCardMutation,
+  useJokerCardMutation,
   useGetMyGroupsQuery,
   useGetGroupQuery,
   useGetPublicGroupsQuery,
@@ -161,4 +346,21 @@ export const {
   useSubmitPredictionMutation,
   useGetNotificationsQuery,
   useMarkNotificationsReadMutation,
+  useGetMatchesQuery,
+  useCreateMatchMutation,
+  useUpdateMatchMutation,
+  useGetMyMatchPredictionQuery,
+  useSubmitMatchPredictionMutation,
+  useGetMatchPredictionsQuery,
+  useGetLeaderboardQuery,
+  useGetAdminTournamentsQuery,
+  useGetAdminResultsQuery,
+  useSetTournamentStatusMutation,
+  useSetActualResultMutation,
+  useCreateAdminTournamentMutation,
+  useUpdateAdminTournamentMutation,
+  useUpdateTournamentSquadsMutation,
+  useCreateAdminMatchMutation,
+  useBulkCreateMatchesMutation,
+  useDeleteAdminMatchMutation,
 } = api;

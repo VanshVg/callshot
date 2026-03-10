@@ -25,10 +25,11 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
 
-    const { name, description, tournamentId, visibility, maxMembers, enabledCategories } =
+    const { name, description, tournamentId, visibility, maxMembers, enabledCategories, enableMatchPredictions } =
       req.body as {
         name: string; description?: string; tournamentId: string;
-        visibility?: 'public' | 'private'; maxMembers?: number; enabledCategories?: string[];
+        visibility?: 'public' | 'private'; maxMembers?: number;
+        enabledCategories?: string[]; enableMatchPredictions?: boolean;
       };
 
     const inviteCode = nanoid(8).toUpperCase();
@@ -43,6 +44,7 @@ router.post(
       visibility: visibility || 'private',
       maxMembers: maxMembers || 20,
       enabledCategories: enabledCategories || [],
+      enableMatchPredictions: enableMatchPredictions ?? false,
     });
 
     const group = await Group.findById(created._id)
@@ -130,15 +132,19 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   }
 
   const tournament = group.tournament as any;
-  if (tournament?.status !== 'upcoming') {
-    res.status(400).json({ message: 'Group settings can only be changed before the tournament starts' }); return;
-  }
 
-  const { name, description, visibility, maxMembers, enabledCategories } =
+  const { name, description, visibility, maxMembers, enabledCategories, enableMatchPredictions } =
     req.body as {
       name?: string; description?: string; visibility?: 'public' | 'private';
-      maxMembers?: number; enabledCategories?: string[];
+      maxMembers?: number; enabledCategories?: string[]; enableMatchPredictions?: boolean;
     };
+
+  // enableMatchPredictions can be toggled at any time; all other settings require upcoming tournament
+  const hasGeneralChanges = name !== undefined || description !== undefined ||
+    visibility !== undefined || maxMembers !== undefined || enabledCategories !== undefined;
+  if (hasGeneralChanges && tournament?.status !== 'upcoming') {
+    res.status(400).json({ message: 'Group settings can only be changed before the tournament starts' }); return;
+  }
 
   if (enabledCategories !== undefined && enabledCategories.length === 0) {
     res.status(400).json({ message: 'At least one category must be enabled' }); return;
@@ -164,6 +170,7 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   if (visibility !== undefined) group.visibility = visibility;
   if (maxMembers !== undefined) group.maxMembers = maxMembers;
   if (enabledCategories !== undefined) group.enabledCategories = enabledCategories as any;
+  if (enableMatchPredictions !== undefined) group.enableMatchPredictions = enableMatchPredictions;
 
   await group.save();
 

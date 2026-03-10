@@ -10,7 +10,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',   // forward to the backend on this machine
+        target: 'http://192.168.29.2:5000',   // forward to the backend on this machine
         changeOrigin: true,
         secure: false,
       },

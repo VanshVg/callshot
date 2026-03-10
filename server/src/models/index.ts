@@ -6,3 +6,5 @@ export { default as Prediction } from './Prediction';
 export { default as StrategyCard } from './StrategyCard';
 export { default as ActualResult } from './ActualResult';
 export { default as Notification } from './Notification';
+export { default as Match } from './Match';
+export { default as MatchPrediction } from './MatchPrediction';

@@ -20,6 +20,7 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
     tournamentId: '',
     visibility: 'private' as 'public' | 'private',
     maxMembers: 20,
+    enableMatchPredictions: false,
   });
   const [errors, setErrors] = useState<{
     name?: string; tournamentId?: string; categories?: string; general?: string;
@@ -78,9 +79,10 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
         visibility: form.visibility,
         maxMembers: form.maxMembers,
         enabledCategories: Array.from(selectedCategories),
+        enableMatchPredictions: form.enableMatchPredictions,
       }).unwrap();
       // RTK invalidates MyGroups tag — Dashboard list auto-refreshes
-      setForm({ name: '', description: '', tournamentId: '', visibility: 'private', maxMembers: 20 });
+      setForm({ name: '', description: '', tournamentId: '', visibility: 'private', maxMembers: 20, enableMatchPredictions: false });
       setSelectedCategories(new Set());
       onClose();
     } catch (err: unknown) {
@@ -252,6 +254,25 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
             {errors.categories && <p className="text-xs text-red-400">{errors.categories}</p>}
           </div>
         )}
+
+        {/* Per-match predictions toggle */}
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <p className="text-sm font-medium text-gray-300">Per-Match Predictions</p>
+            <p className="text-gray-600 text-xs mt-0.5">Members predict each match's results for extra points</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm((f) => ({ ...f, enableMatchPredictions: !f.enableMatchPredictions }))}
+            className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer flex-shrink-0 ${
+              form.enableMatchPredictions ? 'bg-[#FF6800]' : 'bg-[#2A2A2A]'
+            }`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+              form.enableMatchPredictions ? 'translate-x-5' : 'translate-x-0'
+            }`} />
+          </button>
+        </div>
 
         <div className="flex gap-3 mt-2">
           <Button type="button" variant="secondary" fullWidth onClick={onClose}>Cancel</Button>

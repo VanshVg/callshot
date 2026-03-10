@@ -11,6 +11,7 @@ export interface IGroup extends Document {
   visibility: 'public' | 'private';
   maxMembers: number;
   enabledCategories: Types.ObjectId[];
+  enableMatchPredictions: boolean;
   createdAt: Date;
 }
 
@@ -26,6 +27,7 @@ const GroupSchema = new Schema<IGroup>(
     visibility: { type: String, enum: ['public', 'private'], default: 'private' },
     maxMembers: { type: Number, default: 20, min: 2, max: 100 },
     enabledCategories: [{ type: Schema.Types.ObjectId, ref: 'Category' }],
+    enableMatchPredictions: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

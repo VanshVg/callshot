@@ -29,6 +29,7 @@ export const Login = () => {
     setLoading(true);
     setErrors({});
     try {
+      console.log(form,">>>>>>>>>>>>>>>>")
       await login(form.email, form.password);
       navigate('/dashboard');
     } catch (err: unknown) {

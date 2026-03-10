@@ -9,10 +9,11 @@ import { Dashboard } from './pages/Dashboard';
 import { GroupDetail } from './pages/GroupDetail';
 import { Predictions } from './pages/Predictions';
 import { GroupPredictions } from './pages/GroupPredictions';
-
-// Phase 5+ stubs
-const Leaderboard = () => <div>Leaderboard</div>;
-const Admin = () => <div>Admin</div>;
+import { GroupMatches } from './pages/GroupMatches';
+import { MatchPredict } from './pages/MatchPredict';
+import { Leaderboard } from './pages/Leaderboard';
+import { Cards } from './pages/Cards';
+import { Admin } from './pages/Admin';
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
@@ -41,6 +42,9 @@ const AppRoutes = () => {
       <Route path="/groups/:id" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
       <Route path="/groups/:groupId/predictions" element={<ProtectedRoute><Predictions /></ProtectedRoute>} />
       <Route path="/groups/:groupId/predictions/all" element={<ProtectedRoute><GroupPredictions /></ProtectedRoute>} />
+      <Route path="/groups/:groupId/matches" element={<ProtectedRoute><GroupMatches /></ProtectedRoute>} />
+      <Route path="/groups/:groupId/matches/:matchId/predict" element={<ProtectedRoute><MatchPredict /></ProtectedRoute>} />
+      <Route path="/groups/:groupId/cards" element={<ProtectedRoute><Cards /></ProtectedRoute>} />
       <Route path="/groups/:groupId/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
 

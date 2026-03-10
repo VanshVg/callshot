@@ -33,6 +33,7 @@ const EditPanel = ({ group, allCategories, onClose }: EditPanelProps) => {
     description: group.description,
     visibility: group.visibility,
     maxMembers: group.maxMembers,
+    enableMatchPredictions: group.enableMatchPredictions ?? false,
   });
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(
@@ -70,6 +71,7 @@ const EditPanel = ({ group, allCategories, onClose }: EditPanelProps) => {
           visibility: form.visibility,
           maxMembers: form.maxMembers,
           enabledCategories: Array.from(selectedCategories),
+          enableMatchPredictions: form.enableMatchPredictions,
         },
       }).unwrap();
       // RTK invalidates Group + MyGroups tags — detail auto-refreshes
@@ -210,6 +212,25 @@ const EditPanel = ({ group, allCategories, onClose }: EditPanelProps) => {
         </div>
       )}
 
+      {/* Per-match predictions toggle */}
+      <div className="flex items-center justify-between py-2">
+        <div>
+          <p className="text-sm font-medium text-gray-300">Per-Match Predictions</p>
+          <p className="text-gray-600 text-xs mt-0.5">Members predict match winners, top players, and powerplay scores</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setForm((f) => ({ ...f, enableMatchPredictions: !f.enableMatchPredictions }))}
+          className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer flex-shrink-0 ${
+            form.enableMatchPredictions ? 'bg-[#FF6800]' : 'bg-[#2A2A2A]'
+          }`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+            form.enableMatchPredictions ? 'translate-x-5' : 'translate-x-0'
+          }`} />
+        </button>
+      </div>
+
       <div className="flex gap-2 pt-1">
         <Button variant="secondary" fullWidth onClick={onClose}>Cancel</Button>
         <Button fullWidth loading={isLoading} onClick={handleSave}>Save Changes</Button>
@@ -298,7 +319,7 @@ export const GroupDetail = () => {
   }
 
   const creatorId = typeof group.createdBy === 'object' ? group.createdBy?._id : group.createdBy;
-  const isCreator = !!user?._id && String(creatorId) === user._id;
+  const isCreator = !!user && String(creatorId) === (user._id ?? user.id);
   const tournamentStatus = (group.tournament as any)?.status as keyof typeof statusConfig;
   const canEdit = isCreator && tournamentStatus === 'upcoming';
   const canLeave = !isCreator && tournamentStatus === 'upcoming';
@@ -388,8 +409,8 @@ export const GroupDetail = () => {
           />
         )}
 
-        {/* Invite code (admin only) */}
-        {isCreator && (
+        {/* Invite code (admin only, only while tournament is upcoming) */}
+        {isCreator && tournamentStatus === 'upcoming' && (
           <div className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl p-5">
             <p className="text-gray-400 text-sm font-medium mb-3">Invite Code</p>
             <div className="flex items-center gap-3">
@@ -444,6 +465,30 @@ export const GroupDetail = () => {
                 <p className="text-white font-semibold group-hover:text-[#FF6800] transition-colors">Member Predictions</p>
                 <p className="text-gray-500 text-sm">
                   {tournamentStatus === 'upcoming' ? 'Revealed when tournament starts' : 'See everyone\'s picks'}
+                </p>
+              </div>
+              <svg className="w-5 h-5 text-gray-600 group-hover:text-[#FF6800] ml-auto transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </div>
+          </Link>
+          {group.enableMatchPredictions && (
+            <Link to={`/groups/${group._id}/matches`} className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl p-5 no-underline hover:border-[#FF6800]/40 hover:bg-[#242424] transition-all group">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-[#FF6800]/10 rounded-lg flex items-center justify-center text-xl flex-shrink-0">🏏</div>
+                <div>
+                  <p className="text-white font-semibold group-hover:text-[#FF6800] transition-colors">Match Predictions</p>
+                  <p className="text-gray-500 text-sm">Predict each match's results</p>
+                </div>
+                <svg className="w-5 h-5 text-gray-600 group-hover:text-[#FF6800] ml-auto transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </Link>
+          )}
+          <Link to={`/groups/${group._id}/cards`} className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl p-5 no-underline hover:border-[#FF6800]/40 hover:bg-[#242424] transition-all group">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-[#FF6800]/10 rounded-lg flex items-center justify-center text-xl flex-shrink-0">🃏</div>
+              <div>
+                <p className="text-white font-semibold group-hover:text-[#FF6800] transition-colors">Strategy Cards</p>
+                <p className="text-gray-500 text-sm">
+                  {tournamentStatus === 'live' ? 'Use swap or joker cards' : 'Swap & joker cards'}
                 </p>
               </div>
               <svg className="w-5 h-5 text-gray-600 group-hover:text-[#FF6800] ml-auto transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>

@@ -9,6 +9,8 @@ export interface ITournament extends Document {
   startDate: Date;
   endDate: Date;
   status: 'upcoming' | 'live' | 'completed';
+  teams: string[];
+  squads: Map<string, string[]>;
   createdAt: Date;
 }
 
@@ -22,6 +24,8 @@ const TournamentSchema = new Schema<ITournament>(
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
     status: { type: String, enum: ['upcoming', 'live', 'completed'], default: 'upcoming' },
+    teams: { type: [String], default: [] },
+    squads: { type: Map, of: [String], default: {} },
   },
   { timestamps: true }
 );

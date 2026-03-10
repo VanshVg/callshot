@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Layout } from '../components/common/Layout';
 import { Button } from '../components/common/Button';
+import { CelebrationOverlay } from '../components/common/CelebrationOverlay';
 import {
   useGetGroupQuery,
   useGetTournamentOptionsQuery,
@@ -18,6 +19,116 @@ const ordinal = (n: number) => {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
 
+// ── SlotDropdown — searchable dropdown for a single pick slot ─────────────────
+
+interface SlotDropdownProps {
+  position: number;
+  options: string[];        // already filtered (excludes other slots' picks)
+  value: string;
+  onSelect: (v: string) => void;
+  onClear: () => void;
+  disabled: boolean;
+  isTeam?: boolean;
+}
+
+const SlotDropdown = ({ position, options, value, onSelect, onClear, disabled, isTeam }: SlotDropdownProps) => {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const filtered = options.filter((o) => o.toLowerCase().includes(search.toLowerCase()));
+
+  const select = useCallback((name: string) => {
+    onSelect(name);
+    setSearch('');
+    setOpen(false);
+  }, [onSelect]);
+
+  return (
+    <div className="relative">
+      <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
+        value
+          ? 'bg-[#FF6800]/5 border-[#FF6800]/25'
+          : disabled
+          ? 'bg-[#111111] border-[#2A2A2A] border-dashed'
+          : 'bg-[#111111] border-[#2A2A2A] focus-within:border-[#FF6800]'
+      }`}>
+        {/* Ordinal label */}
+        <span className={`text-xs font-bold w-7 shrink-0 ${value ? 'text-[#FF6800]' : 'text-gray-600'}`}>
+          {ordinal(position)}
+        </span>
+
+        {value ? (
+          /* ── Filled: show name + clear ── */
+          <>
+            <span className="text-gray-200 text-sm flex-1 truncate">{value}</span>
+            {!disabled && (
+              <button
+                onClick={onClear}
+                className="text-gray-600 hover:text-red-400 transition-colors shrink-0 cursor-pointer"
+                aria-label="Remove"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </>
+        ) : disabled ? (
+          /* ── Disabled empty: placeholder text ── */
+          <span className="text-gray-600 text-sm italic">
+            {isTeam ? `Pick ${ordinal(position)} team` : `Pick ${ordinal(position)} player`}
+          </span>
+        ) : (
+          /* ── Active empty: inline search ── */
+          <>
+            <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
+              placeholder={isTeam ? 'Search teams…' : 'Search players…'}
+              className="bg-transparent text-white text-sm outline-none flex-1 placeholder-gray-600"
+            />
+            {search && (
+              <button
+                onMouseDown={(e) => { e.preventDefault(); setSearch(''); }}
+                className="text-gray-600 hover:text-gray-400 cursor-pointer shrink-0"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Dropdown list — absolutely positioned below the row */}
+      {open && filtered.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-lg overflow-hidden z-20 shadow-2xl max-h-44 overflow-y-auto">
+          {filtered.map((name) => (
+            <button
+              key={name}
+              onMouseDown={() => select(name)}
+              className="w-full text-left px-3 py-2.5 text-sm text-gray-300 hover:bg-[#FF6800]/10 hover:text-white transition-colors cursor-pointer border-b border-[#2A2A2A] last:border-0"
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && search && filtered.length === 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-lg p-3 z-20 shadow-2xl">
+          <p className="text-gray-500 text-sm text-center">No results for "{search}"</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── CategoryCard ──────────────────────────────────────────────────────────────
 
 interface CategoryCardProps {
@@ -29,29 +140,10 @@ interface CategoryCardProps {
 }
 
 const CategoryCard = ({ category, options, value, onChange, disabled }: CategoryCardProps) => {
-  const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const isTeam = category.type === 'team_position';
   const count = category.selectionCount;
   const isFull = value.length >= count;
-
-  const filtered = options.filter(
-    (o) => o.toLowerCase().includes(search.toLowerCase()) && !value.includes(o),
-  );
-
-  const add = (name: string) => {
-    if (value.includes(name) || isFull) return;
-    const next = [...value, name];
-    onChange(next);
-    setSearch('');
-    if (next.length < count) inputRef.current?.focus();
-    else setOpen(false);
-  };
-
-  const remove = (idx: number) => {
-    onChange(value.filter((_, i) => i !== idx));
-  };
+  const complete = value.length === count;
 
   const toggleTeam = (name: string) => {
     if (value.includes(name)) {
@@ -61,7 +153,15 @@ const CategoryCard = ({ category, options, value, onChange, disabled }: Category
     }
   };
 
-  const complete = value.length === count;
+  const setSlot = (idx: number, name: string) => {
+    const next = [...value];
+    next[idx] = name;
+    onChange(next);
+  };
+
+  const clearSlot = (idx: number) => {
+    onChange(value.filter((_, i) => i !== idx));
+  };
 
   return (
     <div className={`bg-[#1E1E1E] border rounded-xl p-5 flex flex-col gap-4 transition-colors ${
@@ -84,129 +184,51 @@ const CategoryCard = ({ category, options, value, onChange, disabled }: Category
         </span>
       </div>
 
-      {/* Ranked slots */}
-      <div className="flex flex-col gap-2">
-        {Array.from({ length: count }).map((_, i) => {
-          const selected = value[i];
-          return (
-            <div
-              key={i}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
-                selected
-                  ? 'bg-[#FF6800]/5 border-[#FF6800]/25'
-                  : 'bg-[#111111] border-[#2A2A2A] border-dashed'
-              }`}
-            >
-              <span className={`text-xs font-bold w-7 shrink-0 ${
-                selected ? 'text-[#FF6800]' : 'text-gray-600'
-              }`}>
-                {ordinal(i + 1)}
-              </span>
-              {selected ? (
-                <>
-                  <span className="text-gray-200 text-sm flex-1 truncate">{selected}</span>
-                  {!disabled && (
-                    <button
-                      onClick={() => remove(i)}
-                      className="text-gray-600 hover:text-red-400 transition-colors shrink-0 cursor-pointer"
-                      aria-label="Remove"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </>
-              ) : (
-                <span className="text-gray-600 text-sm italic">
-                  {isTeam ? `Pick ${ordinal(i + 1)} team` : `Pick ${ordinal(i + 1)} player`}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Picker — hidden when disabled */}
-      {!disabled && (
-        isTeam ? (
-          /* Team chip grid */
-          <div className="flex flex-wrap gap-2">
-            {options.map((team) => {
-              const idx = value.indexOf(team);
-              const selected = idx !== -1;
-              return (
-                <button
-                  key={team}
-                  onClick={() => toggleTeam(team)}
-                  disabled={!selected && isFull}
-                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
-                    selected
-                      ? 'bg-[#FF6800]/10 border-[#FF6800]/40 text-[#FF6800]'
-                      : isFull
-                      ? 'bg-[#1A1A1A] border-[#2A2A2A] text-gray-600 opacity-40 cursor-not-allowed'
-                      : 'bg-[#2A2A2A] border-[#3A3A3A] text-gray-300 hover:border-[#FF6800]/40 hover:text-white'
-                  }`}
-                >
-                  {selected && <span className="mr-1 font-bold">{idx + 1}.</span>}
-                  {team}
-                </button>
-              );
-            })}
-          </div>
-        ) : !isFull ? (
-          /* Player search */
-          <div className="relative">
-            <div className="flex items-center gap-2 bg-[#111111] border border-[#2F2F2F] focus-within:border-[#FF6800] rounded-lg px-3 py-2.5 transition-colors">
-              <svg className="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                ref={inputRef}
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
-                onFocus={() => setOpen(true)}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                placeholder={`Search ${isTeam ? 'teams' : 'players'}…`}
-                className="bg-transparent text-white text-sm outline-none flex-1 placeholder-gray-600"
+      {isTeam ? (
+        /* ── Team chip grid ── */
+        <div className="flex flex-wrap gap-2">
+          {options.map((team) => {
+            const idx = value.indexOf(team);
+            const selected = idx !== -1;
+            return (
+              <button
+                key={team}
+                onClick={() => !disabled && toggleTeam(team)}
+                disabled={disabled || (!selected && isFull)}
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+                  selected
+                    ? 'bg-[#FF6800]/10 border-[#FF6800]/40 text-[#FF6800]'
+                    : disabled || isFull
+                    ? 'bg-[#1A1A1A] border-[#2A2A2A] text-gray-600 opacity-40 cursor-not-allowed'
+                    : 'bg-[#2A2A2A] border-[#3A3A3A] text-gray-300 hover:border-[#FF6800]/40 hover:text-white'
+                }`}
+              >
+                {selected && <span className="mr-1 font-bold">{idx + 1}.</span>}
+                {team}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        /* ── Per-slot player dropdowns ── */
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: count }).map((_, i) => {
+            const otherPicks = value.filter((_, j) => j !== i);
+            const slotOptions = options.filter((o) => !otherPicks.includes(o));
+            return (
+              <SlotDropdown
+                key={i}
+                position={i + 1}
+                options={slotOptions}
+                value={value[i] ?? ''}
+                onSelect={(name) => setSlot(i, name)}
+                onClear={() => clearSlot(i)}
+                disabled={disabled}
+                isTeam={false}
               />
-              {search && (
-                <button
-                  onMouseDown={(e) => { e.preventDefault(); setSearch(''); }}
-                  className="text-gray-600 hover:text-gray-400 transition-colors cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-
-            {open && filtered.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-lg overflow-hidden z-20 shadow-2xl max-h-44 overflow-y-auto">
-                {filtered.map((name) => (
-                  <button
-                    key={name}
-                    onMouseDown={() => add(name)}
-                    className="w-full text-left px-3 py-2.5 text-sm text-gray-300 hover:bg-[#FF6800]/10 hover:text-white transition-colors cursor-pointer border-b border-[#2A2A2A] last:border-0"
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {open && search && filtered.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-lg p-3 z-20 shadow-2xl">
-                <p className="text-gray-500 text-sm text-center">No results for "{search}"</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="text-gray-600 text-xs text-center py-1">
-            All {count} picks selected — remove one to change.
-          </p>
-        )
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -219,6 +241,7 @@ export const Predictions = () => {
 
   const [picks, setPicks] = useState<Record<string, string[]>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const [error, setError] = useState('');
 
   const { data: group, isLoading: groupLoading, isError } = useGetGroupQuery(groupId!);
@@ -281,6 +304,7 @@ export const Predictions = () => {
         picks: categories.map((cat) => ({ category: cat._id, selections: picks[cat._id] ?? [] })),
       }).unwrap();
       setSubmitted(true);
+      setShowCelebration(true);
     } catch (err: unknown) {
       setError(
         (err as { data?: { message?: string } })?.data?.message || 'Failed to submit predictions',
@@ -324,6 +348,14 @@ export const Predictions = () => {
 
   return (
     <Layout>
+      {showCelebration && (
+        <CelebrationOverlay
+          headline="Shot Called!"
+          subline={hasExisting ? 'Predictions updated. May the best call win!' : 'Your picks are locked in. May the best prediction win!'}
+          onDone={() => setShowCelebration(false)}
+        />
+      )}
+
       {/* Extra bottom padding so sticky bar doesn't overlap content */}
       <div className="flex flex-col gap-6 pb-28">
 

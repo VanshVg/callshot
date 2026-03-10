@@ -45,8 +45,8 @@ router.post('/swap', async (req: AuthRequest, res: Response): Promise<void> => {
   if (!data) return;
   const { strategyCard, prediction } = data;
 
-  const availableCard = strategyCard!.cards.find((c) => c.type === 'swap' && !c.used);
-  if (!availableCard) { res.status(400).json({ message: 'No swap cards remaining' }); return; }
+  const availableCard = strategyCard!.cards.find((c) => !c.used);
+  if (!availableCard) { res.status(400).json({ message: 'No cards remaining' }); return; }
 
   const { categoryId, oldSelection, newSelection } = req.body as { groupId: string; tournamentId: string; categoryId: string; oldSelection: string; newSelection: string };
 
@@ -59,6 +59,7 @@ router.post('/swap', async (req: AuthRequest, res: Response): Promise<void> => {
   pick.selections[idx] = newSelection;
   await prediction!.save();
 
+  availableCard.type = 'swap';
   availableCard.used = true;
   availableCard.usedAt = new Date();
   availableCard.details = { categoryId, oldSelection, newSelection };
@@ -72,11 +73,12 @@ router.post('/joker', async (req: AuthRequest, res: Response): Promise<void> => 
   if (!data) return;
   const { strategyCard } = data;
 
-  const availableCard = strategyCard!.cards.find((c) => c.type === 'joker' && !c.used);
-  if (!availableCard) { res.status(400).json({ message: 'No joker cards remaining' }); return; }
+  const availableCard = strategyCard!.cards.find((c) => !c.used);
+  if (!availableCard) { res.status(400).json({ message: 'No cards remaining' }); return; }
 
   const { categoryId, player, predictedPosition } = req.body as { groupId: string; tournamentId: string; categoryId: string; player: string; predictedPosition: number };
 
+  availableCard.type = 'joker';
   availableCard.used = true;
   availableCard.usedAt = new Date();
   availableCard.details = { categoryId, player, predictedPosition };
