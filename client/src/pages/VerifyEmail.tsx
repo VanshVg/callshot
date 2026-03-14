@@ -1,4 +1,5 @@
-import { useState, useRef, KeyboardEvent, ClipboardEvent, FormEvent } from 'react';
+import { useState, useRef } from 'react';
+import type { KeyboardEvent, ClipboardEvent, FormEvent } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/common/Button';

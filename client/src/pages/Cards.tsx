@@ -293,7 +293,6 @@ const CardTile = ({
 
   // For used cards, show the actual type used
   const usedAsSwap = card.used && card.type === 'swap';
-  const usedAsJoker = card.used && card.type === 'joker';
 
   return (
     <div className={`bg-[#1E1E1E] border rounded-xl p-5 flex flex-col gap-3 transition-colors ${
