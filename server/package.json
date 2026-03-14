@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "seed": "ts-node src/seed/ipl.ts",
+    "seed:squads": "ts-node src/seed/seedSquads.ts",
     "fix:pot": "ts-node src/seed/fixPOT.ts"
   },
   "keywords": [],

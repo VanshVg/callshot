@@ -121,6 +121,9 @@ export const Navbar = () => {
               <Link to="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors no-underline">
                 Dashboard
               </Link>
+              <Link to="/rules" className="text-gray-400 hover:text-white text-sm transition-colors no-underline">
+                How to Play
+              </Link>
               {user.role === 'admin' && (
                 <Link to="/admin" className="text-gray-400 hover:text-white text-sm transition-colors no-underline">
                   Admin
@@ -207,6 +210,9 @@ export const Navbar = () => {
           </>
         ) : (
           <div className="flex items-center gap-3">
+            <Link to="/rules" className="text-sm text-gray-400 hover:text-white transition-colors no-underline">
+              How to Play
+            </Link>
             <Link to="/login" className="text-sm text-gray-300 hover:text-white transition-colors no-underline">
               Login
             </Link>
@@ -225,6 +231,9 @@ export const Navbar = () => {
         <div className="sm:hidden bg-[#1C1C1C] border-t border-[#2F2F2F] px-4 py-3 flex flex-col gap-3">
           <Link to="/dashboard" onClick={() => setMenuOpen(false)} className="text-gray-300 text-sm no-underline">
             Dashboard
+          </Link>
+          <Link to="/rules" onClick={() => setMenuOpen(false)} className="text-gray-300 text-sm no-underline">
+            How to Play
           </Link>
           {user.role === 'admin' && (
             <Link to="/admin" onClick={() => setMenuOpen(false)} className="text-gray-300 text-sm no-underline">

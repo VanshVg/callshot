@@ -51,6 +51,8 @@ export const GroupCard = ({ group, onJoin, joining }: Props) => {
   const { label, color } = statusConfig[displayStatus] ?? statusConfig.upcoming;
   const isFull = group.members.length >= group.maxMembers;
 
+  console.log(group,"!!!!!!!!!!!!!!!")
+
   const cardBody = (
     <>
       <div className="flex items-start justify-between gap-3 mb-3">

@@ -1,7 +1,9 @@
-import mongoose, { Document, Schema, Types } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
+
+export type Sport = 'cricket';
 
 export interface ICategory extends Document {
-  tournament: Types.ObjectId;
+  sport: Sport;
   name: string;
   type: 'player_stat' | 'team_position' | 'single_player';
   selectionCount: number;
@@ -12,7 +14,7 @@ export interface ICategory extends Document {
 
 const CategorySchema = new Schema<ICategory>(
   {
-    tournament: { type: Schema.Types.ObjectId, ref: 'Tournament', required: true },
+    sport: { type: String, enum: ['cricket'], required: true },
     name: { type: String, required: true },
     type: { type: String, enum: ['player_stat', 'team_position', 'single_player'], required: true },
     selectionCount: { type: Number, required: true },

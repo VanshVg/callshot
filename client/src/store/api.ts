@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { Category, Group, Tournament, Prediction, GroupPrediction, Notification, Match, MatchPrediction, MatchPicks, LeaderboardEntry, ActualResult, StrategyCards } from '../types/index';
+import type { Category, Group, Tournament, Prediction, GroupPrediction, Notification, Match, MatchPrediction, MatchPicks, LeaderboardEntry, ActualResult, StrategyCards, Sport } from '../types/index';
 
 export const api = createApi({
   reducerPath: 'api',
@@ -79,6 +79,11 @@ export const api = createApi({
 
     getTournamentCategories: builder.query<Category[], string>({
       query: (id) => `/tournaments/${id}`,
+      transformResponse: (res: { categories: Category[] }) => res.categories,
+    }),
+
+    getCategories: builder.query<Category[], Sport>({
+      query: (sport) => `/categories?sport=${sport}`,
       transformResponse: (res: { categories: Category[] }) => res.categories,
     }),
 
@@ -327,6 +332,7 @@ export const api = createApi({
 });
 
 export const {
+  useGetCategoriesQuery,
   useGetMyCardsQuery,
   useSwapCardMutation,
   useJokerCardMutation,

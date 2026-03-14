@@ -99,7 +99,6 @@ export const resendOtp = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const login = async (req: Request, res: Response): Promise<void> => {
-  console.log("INSIDEEEEEEEEEEEE")
   const errors = validationResult(req);
   if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
 

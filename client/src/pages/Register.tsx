@@ -74,7 +74,7 @@ export const Register = () => {
             <Input
               label="Full Name"
               type="text"
-              placeholder="Rohit Sharma"
+              placeholder="Cody Rhodes"
               value={form.name}
               onChange={set('name')}
               error={errors.name}
@@ -83,7 +83,7 @@ export const Register = () => {
             <Input
               label="Username"
               type="text"
-              placeholder="rohit_sharma"
+              placeholder="cody_rhodes"
               value={form.username}
               onChange={set('username')}
               error={errors.username}

@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { Tournament, Category } from '../models/index';
-import { IPL_PLAYERS, IPL_SQUADS, IPL_TEAMS } from '../constants/ipl';
 
 const router = Router();
 
@@ -15,7 +14,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     res.status(404).json({ message: 'Tournament not found' });
     return;
   }
-  const categories = await Category.find({ tournament: tournament._id }).sort({ order: 1 });
+  // Categories are sport-level, not tournament-specific
+  const categories = await Category.find({ sport: tournament.sport }).sort({ order: 1 });
   res.json({ tournament, categories });
 });
 
@@ -28,12 +28,12 @@ router.get('/:id/options', async (req: Request, res: Response) => {
     return;
   }
 
-  // Use DB-stored teams/squads if present, otherwise fall back to IPL constants
-  const teams = tournament.teams.length > 0 ? tournament.teams : IPL_TEAMS;
+  // Use only this tournament's own teams and squads stored in DB
+  const teams = tournament.teams;
   const squadsMap: Record<string, string[]> =
     tournament.squads && tournament.squads.size > 0
       ? Object.fromEntries(tournament.squads)
-      : IPL_SQUADS;
+      : {};
 
   const players = Array.from(new Set(Object.values(squadsMap).flat())).sort();
 

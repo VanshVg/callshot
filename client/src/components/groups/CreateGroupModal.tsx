@@ -5,7 +5,7 @@ import { Button } from '../common/Button';
 import {
   useCreateGroupMutation,
   useGetTournamentsQuery,
-  useGetTournamentCategoriesQuery,
+  useGetCategoriesQuery,
 } from '../../store/api';
 
 interface Props {
@@ -28,20 +28,16 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
 
   const { data: tournaments = [] } = useGetTournamentsQuery(undefined, { skip: !open });
-  const { data: allCategories = [], isFetching: categoriesLoading } = useGetTournamentCategoriesQuery(
-    form.tournamentId,
-    { skip: !form.tournamentId }
-  );
+  const { data: allCategories = [], isFetching: categoriesLoading } = useGetCategoriesQuery('cricket', { skip: !open });
   const [createGroup, { isLoading }] = useCreateGroupMutation();
 
-  // Auto-select all categories when they load or tournament changes
+  // Auto-select all categories when they load
   useEffect(() => {
-    if (!form.tournamentId) { setSelectedCategories(new Set()); return; }
     if (allCategories.length > 0) {
       setSelectedCategories(new Set(allCategories.map((c) => c._id)));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.tournamentId, allCategories.length]);
+  }, [allCategories.length]);
 
   const toggleCategory = (id: string) => {
     setSelectedCategories((prev) => {
@@ -61,7 +57,7 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
     const e: typeof errors = {};
     if (!form.name.trim()) e.name = 'Group name is required';
     if (!form.tournamentId) e.tournamentId = 'Please select a tournament';
-    if (allCategories.length > 0 && selectedCategories.size === 0)
+    if (selectedCategories.size === 0)
       e.categories = 'Select at least one category';
     return e;
   };
@@ -191,8 +187,7 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
         </div>
 
         {/* Category selection */}
-        {form.tournamentId && (
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-300">
                 Prediction Categories
@@ -253,7 +248,6 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
             )}
             {errors.categories && <p className="text-xs text-red-400">{errors.categories}</p>}
           </div>
-        )}
 
         {/* Per-match predictions toggle */}
         <div className="flex items-center justify-between py-1">

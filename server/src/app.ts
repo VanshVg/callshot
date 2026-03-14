@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { createServer } from 'http';
 import { connectDB } from './config/db';
 import { BRAND } from './constants/brand';
@@ -10,6 +11,7 @@ import { Match } from './models/index';
 import authRoutes from './routes/auth';
 import groupRoutes from './routes/groups';
 import tournamentRoutes from './routes/tournaments';
+import categoryRoutes from './routes/categories';
 import predictionRoutes from './routes/predictions';
 import cardRoutes from './routes/cards';
 import leaderboardRoutes from './routes/leaderboard';
@@ -39,6 +41,7 @@ app.get('/', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/tournaments', tournamentRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/predictions', predictionRoutes);
 app.use('/api/cards', cardRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
@@ -46,9 +49,18 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/matches', matchRoutes);
 
-app.use((_req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
+// Serve React client in production
+const clientDist = path.join(__dirname, '../../client/dist');
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+} else {
+  app.use((_req, res) => {
+    res.status(404).json({ message: 'Route not found' });
+  });
+}
 
 const PORT = process.env.PORT || 5000;
 

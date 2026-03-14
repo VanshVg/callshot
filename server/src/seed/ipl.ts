@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { Tournament, Category, Match } from '../models/index';
-import { IPL_TEAMS, IPL_PLAYERS } from '../constants/ipl';
+import { IPL_TEAMS, IPL_PLAYERS, IPL_SQUADS } from '../constants/ipl';
 
 const CATEGORIES = [
   { name: 'Purple Cap', type: 'player_stat', selectionCount: 3, scoringType: 'positional', description: 'Most wickets in the season', order: 1 },
@@ -169,11 +169,17 @@ const seed = async () => {
   // Clear existing IPL 2025 data
   const existing = await Tournament.findOne({ type: 'ipl', season: '2025' });
   if (existing) {
-    await Category.deleteMany({ tournament: existing._id });
     await Match.deleteMany({ tournament: existing._id });
     await existing.deleteOne();
-    console.log('Cleared existing IPL 2025 data');
+    console.log('Cleared existing IPL 2025 tournament + matches');
   }
+
+  // (Re)seed cricket categories — shared across all cricket tournaments
+  await Category.deleteMany({ sport: 'cricket' });
+  const categoryDocs = await Category.insertMany(
+    CATEGORIES.map((c) => ({ ...c, sport: 'cricket' }))
+  );
+  console.log(`Created ${categoryDocs.length} cricket categories`);
 
   const tournament = await Tournament.create({
     name: 'IPL 2025',
@@ -183,22 +189,19 @@ const seed = async () => {
     totalMatches: 74,
     startDate: hoursAgo(72),
     endDate: new Date('2025-05-25'),
-    status: 'live',  // Live so members can see each other's tournament predictions
+    status: 'live',
+    teams: IPL_TEAMS,
+    squads: new Map(Object.entries(IPL_SQUADS)),
   });
-
-  const categoryDocs = await Category.insertMany(
-    CATEGORIES.map((c) => ({ ...c, tournament: tournament._id }))
-  );
 
   const matchDocs = await Match.insertMany(
     DEMO_MATCHES.map((m) => ({ ...m, tournament: tournament._id }))
   );
 
   console.log(`Created tournament: ${tournament.name} (status: ${tournament.status})`);
-  console.log(`Created ${categoryDocs.length} categories`);
   console.log(`Created ${matchDocs.length} demo matches:`);
   matchDocs.forEach((m: any) => {
-    console.log(`  Match ${m.matchNumber}: ${m.teamA} vs ${m.teamB} — ${m.status} — ${new Date(m.scheduledAt).toLocaleString()}`);
+    console.log(`  Match ${m.matchNumber}: ${m.teamA} vs ${m.teamB} — ${m.status}`);
   });
   console.log('\nIPL Teams:', IPL_TEAMS.length);
   console.log('IPL Players:', IPL_PLAYERS.length);

@@ -21,8 +21,11 @@ export interface Tournament {
   squads?: Record<string, string[]>;
 }
 
+export type Sport = 'cricket';
+
 export interface Category {
   _id: string;
+  sport: Sport;
   name: string;
   type: 'player_stat' | 'team_position' | 'single_player';
   selectionCount: number;

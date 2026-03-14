@@ -34,12 +34,12 @@ const MatchCard = ({ match, groupId }: { match: Match; groupId: string }) => {
   return (
     <div className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl overflow-hidden hover:border-[#3A3A3A] transition-colors">
       {/* Match header */}
-      <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="px-5 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="text-gray-600 text-xs font-medium">Match {match.matchNumber}</span>
-          {match.venue && <span className="text-gray-700 text-xs">· {match.venue}</span>}
+          {match.venue && <span className="text-gray-700 text-xs hidden sm:inline">· {match.venue}</span>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {hasPredicted && !windowClosed && (
             <span className="text-xs text-[#FF6800] bg-[#FF6800]/10 border border-[#FF6800]/20 px-2 py-0.5 rounded-full font-medium">
               Predicted

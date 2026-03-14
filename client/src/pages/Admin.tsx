@@ -214,7 +214,7 @@ const TournamentForm = ({ existing, onDone }: { existing?: Tournament; onDone: (
 
 // ── Squads Manager ─────────────────────────────────────────────────────────────
 
-const SquadsManager = ({ tournament }: { tournament: Tournament }) => {
+const SquadsManager = ({ tournament, allTournaments }: { tournament: Tournament; allTournaments: Tournament[] }) => {
   const [teams, setTeams] = useState<string[]>(tournament.teams ?? []);
   const [squads, setSquads] = useState<Record<string, string[]>>(tournament.squads ?? {});
   const [selectedTeam, setSelectedTeam] = useState('');
@@ -222,8 +222,39 @@ const SquadsManager = ({ tournament }: { tournament: Tournament }) => {
   const [newPlayer, setNewPlayer] = useState('');
   const [csvError, setCsvError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importFromId, setImportFromId] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const [updateSquads, { isLoading }] = useUpdateTournamentSquadsMutation();
+
+  const otherTournaments = allTournaments.filter((t) => t._id !== tournament._id);
+
+  const { data: importOptions, isFetching: importFetching } = useGetTournamentOptionsQuery(importFromId!, {
+    skip: !importFromId,
+  });
+
+  const handleImportReplace = () => {
+    if (!importOptions) return;
+    setTeams(importOptions.teams);
+    setSquads(importOptions.squads as Record<string, string[]>);
+    setSelectedTeam('');
+    setShowImport(false);
+    setImportFromId('');
+  };
+
+  const handleImportMerge = () => {
+    if (!importOptions) return;
+    setTeams((prev) => Array.from(new Set([...prev, ...importOptions.teams])));
+    setSquads((prev) => {
+      const next = { ...prev };
+      for (const [team, players] of Object.entries(importOptions.squads as Record<string, string[]>)) {
+        next[team] = Array.from(new Set([...(next[team] ?? []), ...players]));
+      }
+      return next;
+    });
+    setShowImport(false);
+    setImportFromId('');
+  };
 
   const addTeam = () => {
     const t = newTeam.trim();
@@ -285,7 +316,7 @@ const SquadsManager = ({ tournament }: { tournament: Tournament }) => {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* CSV actions */}
+      {/* Toolbar */}
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => downloadCSV(SQUAD_SAMPLE, 'squads_sample.csv')}
@@ -294,7 +325,7 @@ const SquadsManager = ({ tournament }: { tournament: Tournament }) => {
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          Download Sample CSV
+          Sample CSV
         </button>
         <button
           onClick={() => fileRef.current?.click()}
@@ -303,10 +334,105 @@ const SquadsManager = ({ tournament }: { tournament: Tournament }) => {
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12" />
           </svg>
-          Import Squads CSV
+          Import CSV
         </button>
+        {otherTournaments.length > 0 && (
+          <button
+            onClick={() => { setShowImport((v) => !v); setImportFromId(''); }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
+              showImport
+                ? 'border-[#FF6800]/50 text-[#FF6800] bg-[#FF6800]/5'
+                : 'border-[#2F2F2F] text-gray-400 hover:border-[#FF6800] hover:text-white'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Copy from Tournament
+          </button>
+        )}
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleSquadCSV} />
       </div>
+
+      {/* Import from tournament panel */}
+      {showImport && (
+        <div className="bg-[#111] border border-[#FF6800]/20 rounded-xl p-4 flex flex-col gap-3">
+          <p className="text-gray-300 text-sm font-medium">Copy teams & squads from another tournament</p>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-gray-500 text-xs">Source tournament</label>
+            <select
+              value={importFromId}
+              onChange={(e) => setImportFromId(e.target.value)}
+              className="bg-[#1A1A1A] border border-[#2F2F2F] focus:border-[#FF6800] rounded-lg px-3 py-2 text-white text-sm outline-none transition-colors"
+            >
+              <option value="">Select a tournament…</option>
+              {otherTournaments.map((t) => (
+                <option key={t._id} value={t._id}>
+                  {t.name} ({(t.teams ?? []).length} teams)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {importFromId && (
+            importFetching ? (
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
+                Loading squads…
+              </div>
+            ) : importOptions ? (
+              <div className="flex flex-col gap-3">
+                <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg px-4 py-3 text-xs text-gray-400 flex flex-wrap gap-4">
+                  <span>
+                    <span className="text-white font-semibold">{importOptions.teams.length}</span> teams
+                  </span>
+                  <span>
+                    <span className="text-white font-semibold">{importOptions.players.length}</span> players
+                  </span>
+                  <span className="text-gray-600">
+                    {importOptions.teams.slice(0, 4).join(', ')}{importOptions.teams.length > 4 ? ` +${importOptions.teams.length - 4} more` : ''}
+                  </span>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={handleImportReplace}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 text-xs font-medium hover:bg-red-500/10 transition-colors cursor-pointer"
+                  >
+                    Replace All
+                    <span className="text-red-500/60 font-normal">(clears existing)</span>
+                  </button>
+                  <button
+                    onClick={handleImportMerge}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#FF6800]/40 text-[#FF6800] text-xs font-medium hover:bg-[#FF6800]/10 transition-colors cursor-pointer"
+                  >
+                    Merge
+                    <span className="text-[#FF6800]/60 font-normal">(keeps existing, adds new)</span>
+                  </button>
+                  <button
+                    onClick={() => { setShowImport(false); setImportFromId(''); }}
+                    className="px-3 py-2 rounded-lg border border-[#2F2F2F] text-gray-500 text-xs hover:text-gray-300 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-yellow-500/70 text-xs">This tournament has no squads set up yet.</p>
+            )
+          )}
+
+          {!importFromId && (
+            <button
+              onClick={() => setShowImport(false)}
+              className="text-gray-600 text-xs hover:text-gray-400 transition-colors cursor-pointer w-fit"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
+
       {csvError && <p className="text-red-400 text-xs">{csvError}</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -945,6 +1071,7 @@ export const Admin = () => {
   const [statusSaved, setStatusSaved] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
+  const [expandedSquadsId, setExpandedSquadsId] = useState<string | null>(null);
 
   const { data: tournaments = [], isLoading: tournamentsLoading } = useGetAdminTournamentsQuery();
   const activeTournamentId = selectedTournamentId || tournaments[0]?._id || '';
@@ -1053,43 +1180,73 @@ export const Admin = () => {
             ) : tournaments.length === 0 ? (
               <div className="text-center py-12 text-gray-500 text-sm">No tournaments yet — create one above.</div>
             ) : (
-              tournaments.map((t) => (
-                <div key={t._id} className="bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-white font-semibold">{t.name}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                        t.status === 'live' ? 'text-green-400 bg-green-400/10 border-green-400/20' :
-                        t.status === 'completed' ? 'text-gray-400 bg-gray-400/10 border-gray-400/20' :
-                        'text-blue-400 bg-blue-400/10 border-blue-400/20'
-                      }`}>{t.status}</span>
+              tournaments.map((t) => {
+                const squadsOpen = expandedSquadsId === t._id;
+                const teamCount = (t.teams ?? []).length;
+                return (
+                  <div key={t._id} className={`bg-[#1A1A1A] border rounded-xl overflow-hidden transition-colors ${squadsOpen ? 'border-[#FF6800]/30' : 'border-[#2F2F2F]'}`}>
+                    {/* Card header */}
+                    <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-white font-semibold">{t.name}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                            t.status === 'live' ? 'text-green-400 bg-green-400/10 border-green-400/20' :
+                            t.status === 'completed' ? 'text-gray-400 bg-gray-400/10 border-gray-400/20' :
+                            'text-blue-400 bg-blue-400/10 border-blue-400/20'
+                          }`}>{t.status}</span>
+                        </div>
+                        <p className="text-gray-500 text-xs mt-0.5">
+                          {t.sport} · {t.type} · Season {t.season} ·{' '}
+                          {new Date(t.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} –{' '}
+                          {new Date(t.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                        <p className="text-gray-600 text-xs mt-0.5">{t.totalMatches} matches</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Squads pill — shows team count, click to expand */}
+                        <button
+                          onClick={() => setExpandedSquadsId(squadsOpen ? null : t._id)}
+                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            squadsOpen
+                              ? 'border-[#FF6800]/50 text-[#FF6800] bg-[#FF6800]/10'
+                              : teamCount > 0
+                              ? 'border-[#2F2F2F] text-gray-300 hover:border-[#FF6800]/50 hover:text-[#FF6800]'
+                              : 'border-dashed border-[#3A3A3A] text-gray-500 hover:border-[#FF6800]/50 hover:text-[#FF6800]'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          {teamCount > 0 ? `${teamCount} teams` : 'No squads'}
+                          <svg className={`w-3 h-3 transition-transform ${squadsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => { setEditingTournament(t); setShowCreateForm(false); setExpandedSquadsId(null); }}
+                          className="text-gray-400 hover:text-white text-xs px-3 py-1.5 border border-[#2F2F2F] rounded-lg hover:border-[#3A3A3A] cursor-pointer transition-colors"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-gray-500 text-xs mt-0.5">
-                      {t.sport} · {t.type} · Season {t.season} ·{' '}
-                      {new Date(t.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} –{' '}
-                      {new Date(t.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </p>
-                    <p className="text-gray-600 text-xs mt-0.5">{(t.teams ?? []).length} teams · {t.totalMatches} matches</p>
-                  </div>
-                  <button
-                    onClick={() => { setEditingTournament(t); setShowCreateForm(false); }}
-                    className="text-gray-400 hover:text-white text-xs px-3 py-1.5 border border-[#2F2F2F] rounded-lg hover:border-[#3A3A3A] cursor-pointer transition-colors shrink-0"
-                  >
-                    Edit
-                  </button>
-                </div>
-              ))
-            )}
 
-            {/* Teams & Squads */}
-            {activeTournament && (
-              <div className="bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl p-5 flex flex-col gap-4">
-                <div>
-                  <p className="text-white font-semibold">Teams & Squads</p>
-                  <p className="text-gray-500 text-xs mt-0.5">for {activeTournament.name}</p>
-                </div>
-                <SquadsManager tournament={activeTournament} />
-              </div>
+                    {/* Inline squads manager */}
+                    {squadsOpen && (
+                      <div className="border-t border-[#2F2F2F] px-5 pb-5 pt-4 bg-[#111]/40">
+                        <div className="mb-4">
+                          <p className="text-white font-semibold text-sm">Teams & Squads</p>
+                          <p className="text-gray-500 text-xs mt-0.5">
+                            These players are specific to <span className="text-gray-300">{t.name}</span> — other tournaments have their own independent squads.
+                          </p>
+                        </div>
+                        <SquadsManager key={t._id} tournament={t} allTournaments={tournaments} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         )}
