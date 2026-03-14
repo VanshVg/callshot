@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
 import { createServer } from 'http';
 import { connectDB } from './config/db';
 import { BRAND } from './constants/brand';
@@ -49,18 +48,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/matches', matchRoutes);
 
-// Serve React client in production
-const clientDist = path.join(__dirname, '../../client/dist');
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(clientDist));
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
-  });
-} else {
-  app.use((_req, res) => {
-    res.status(404).json({ message: 'Route not found' });
-  });
-}
+app.use((_req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
 
 const PORT = process.env.PORT || 5000;
 

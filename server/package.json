@@ -11,6 +11,9 @@
     "seed:squads": "ts-node src/seed/seedSquads.ts",
     "fix:pot": "ts-node src/seed/fixPOT.ts"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
