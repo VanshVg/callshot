@@ -10,7 +10,7 @@ const features = [
   {
     icon: '👥',
     title: 'Compete With Friends',
-    desc: 'Create a group, share the invite link, and let the battle begin.',
+    desc: 'Create a group, share the invite code, and let the battle begin.',
   },
   {
     icon: '🃏',
@@ -29,7 +29,7 @@ export const Home = () => (
     {/* Hero */}
     <div className="flex-1 flex flex-col items-center justify-center text-center px-4 pt-20 pb-16">
       <div className="mb-4 inline-flex items-center gap-2 bg-[#FF6800]/10 border border-[#FF6800]/20 text-[#FF6800] text-xs font-medium px-3 py-1 rounded-full">
-        IPL 2025 Season
+        IPL 2026 Season
       </div>
 
       <h1 className="text-5xl sm:text-6xl font-bold text-white leading-tight mb-4">
