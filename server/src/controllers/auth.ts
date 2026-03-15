@@ -30,7 +30,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
   await User.create({ name, username, email, password, otp, otpExpiry, isVerified: false });
-  await sendOtpEmail(email, name, otp);
+  sendOtpEmail(email, name, otp);
 
   res.status(201).json({
     requiresVerification: true,

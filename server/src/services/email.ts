@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { SentMessageInfo } from 'nodemailer';
 import { otpEmailTemplate } from './emailTemplates';
 
 const createTransporter = () => {
@@ -22,11 +22,11 @@ const createTransporter = () => {
 export const generateOtp = (): string =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
-export const sendOtpEmail = async (to: string, name: string, otp: string): Promise<void> => {
+export const sendOtpEmail = (to: string, name: string, otp: string): Promise<SentMessageInfo> => {
   const transporter = createTransporter();
   const from = `"CallShot" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
 
-  await transporter.sendMail({
+  return transporter.sendMail({
     from,
     to,
     subject: `${otp} is your CallShot verification code`,
