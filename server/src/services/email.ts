@@ -11,6 +11,13 @@ const createTransporter = () => {
     throw new Error('SMTP config missing: SMTP_HOST, SMTP_USER, SMTP_PASS are required');
   }
 
+  console.log({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  },">>>>>");
+  
   return nodemailer.createTransport({
     host,
     port,
@@ -25,6 +32,13 @@ export const generateOtp = (): string =>
 export const sendOtpEmail = (to: string, name: string, otp: string): Promise<SentMessageInfo> => {
   const transporter = createTransporter();
   const from = `"CallShot" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
+
+  console.log({
+    from,
+    to,
+    subject: `${otp} is your CallShot verification code`,
+    html: otpEmailTemplate(name, otp),
+  },"<<<<<<<");
 
   return transporter.sendMail({
     from,
