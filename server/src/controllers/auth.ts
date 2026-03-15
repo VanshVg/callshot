@@ -94,7 +94,7 @@ export const resendOtp = async (req: Request, res: Response): Promise<void> => {
   user.otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
   await user.save();
 
-  sendOtpEmail(email, user.name, otp);
+  await sendOtpEmail(email, user.name, otp);
   res.json({ message: `New verification code sent to ${email}` });
 };
 
@@ -111,7 +111,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 
   if (!user.isVerified) {
-    sendOtpEmail(user.email, user.name, generateOtp());
     res.status(403).json({
       message: 'Email not verified',
       requiresVerification: true,
