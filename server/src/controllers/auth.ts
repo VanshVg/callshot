@@ -30,7 +30,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
   await User.create({ name, username, email, password, otp, otpExpiry, isVerified: false });
-  sendOtpEmail(email, name, otp);
+  await sendOtpEmail(email, name, otp);
 
   res.status(201).json({
     requiresVerification: true,
@@ -111,6 +111,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 
   if (!user.isVerified) {
+    const otp = generateOtp();
+    user.otp = otp;
+    user.otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+    await user.save();
+    await sendOtpEmail(email, user.name, otp);
     res.status(403).json({
       message: 'Email not verified',
       requiresVerification: true,
