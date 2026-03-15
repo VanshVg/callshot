@@ -1,49 +1,20 @@
-import nodemailer, { SentMessageInfo } from 'nodemailer';
+import { BrevoClient } from '@getbrevo/brevo';
 import { otpEmailTemplate } from './emailTemplates';
-
-const createTransporter = () => {
-  const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    throw new Error('SMTP config missing: SMTP_HOST, SMTP_USER, SMTP_PASS are required');
-  }
-
-  console.log({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  },">>>>>");
-  
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-};
 
 export const generateOtp = (): string =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
-export const sendOtpEmail = (to: string, name: string, otp: string): Promise<SentMessageInfo> => {
-  const transporter = createTransporter();
-  const from = `"CallShot" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
+export const sendOtpEmail =  (to: string, name: string, otp: string): void => {
+  const client = new BrevoClient({ apiKey: process.env.BREVO_API_KEY || '' });
 
-  console.log({
-    from,
-    to,
+  client.transactionalEmails.sendTransacEmail({
+    sender: {
+      name: process.env.SMTP_FROM_NAME || 'CallShot',
+      email: process.env.SMTP_FROM_EMAIL || '',
+    },
+    to: [{ email: to }],
     subject: `${otp} is your CallShot verification code`,
-    html: otpEmailTemplate(name, otp),
-  },"<<<<<<<");
-
-  return transporter.sendMail({
-    from,
-    to,
-    subject: `${otp} is your CallShot verification code`,
-    html: otpEmailTemplate(name, otp),
+    htmlContent: otpEmailTemplate(name, otp),
   });
+
 };
