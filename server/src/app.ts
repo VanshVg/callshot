@@ -26,8 +26,10 @@ app.use(cors({
     if (!origin) return cb(null, true);
     const isAllowed =
       allowedOrigins.includes(origin) ||
+      /\.vercel\.app$/.test(origin) ||
+      /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
       /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(origin);
-    cb(isAllowed ? null : new Error(`CORS: ${origin} not allowed`), isAllowed);
+    cb(null, isAllowed);
   },
   credentials: true,
 }));
