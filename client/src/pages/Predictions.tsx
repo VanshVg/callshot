@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Layout } from '../components/common/Layout';
 import { Button } from '../components/common/Button';
@@ -23,19 +23,28 @@ const ordinal = (n: number) => {
 
 interface SlotDropdownProps {
   position: number;
-  options: string[];        // already filtered (excludes other slots' picks)
+  options: string[];
   value: string;
   onSelect: (v: string) => void;
   onClear: () => void;
   disabled: boolean;
   isTeam?: boolean;
+  playerToTeam?: Record<string, string>;
+  isDragging?: boolean;
+  isDragOver?: boolean;
 }
 
-const SlotDropdown = ({ position, options, value, onSelect, onClear, disabled, isTeam }: SlotDropdownProps) => {
+const SlotDropdown = ({
+  position, options, value, onSelect, onClear,
+  disabled, isTeam, playerToTeam, isDragging, isDragOver,
+}: SlotDropdownProps) => {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
 
-  const filtered = options.filter((o) => o.toLowerCase().includes(search.toLowerCase()));
+  const filtered = options.filter((o) =>
+    o.toLowerCase().includes(search.toLowerCase()) ||
+    (playerToTeam?.[o] ?? '').toLowerCase().includes(search.toLowerCase())
+  );
 
   const select = useCallback((name: string) => {
     onSelect(name);
@@ -43,8 +52,10 @@ const SlotDropdown = ({ position, options, value, onSelect, onClear, disabled, i
     setOpen(false);
   }, [onSelect]);
 
+  const team = value ? playerToTeam?.[value] : undefined;
+
   return (
-    <div className="relative">
+    <div className={`relative transition-all duration-150 ${isDragging ? 'opacity-40 scale-[0.98]' : ''} ${isDragOver ? 'ring-2 ring-[#FF6800]/50 rounded-lg scale-[1.01]' : ''}`}>
       <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
         value
           ? 'bg-[#FF6800]/5 border-[#FF6800]/25'
@@ -58,9 +69,12 @@ const SlotDropdown = ({ position, options, value, onSelect, onClear, disabled, i
         </span>
 
         {value ? (
-          /* ── Filled: show name + clear ── */
+          /* ── Filled: show name + team + clear ── */
           <>
-            <span className="text-gray-200 text-sm flex-1 truncate">{value}</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-gray-200 text-sm block truncate">{value}</span>
+              {team && <span className="text-[11px] text-gray-500 truncate block">{team}</span>}
+            </div>
             {!disabled && (
               <button
                 onClick={onClear}
@@ -74,12 +88,10 @@ const SlotDropdown = ({ position, options, value, onSelect, onClear, disabled, i
             )}
           </>
         ) : disabled ? (
-          /* ── Disabled empty: placeholder text ── */
           <span className="text-gray-600 text-sm italic">
             {isTeam ? `Pick ${ordinal(position)} team` : `Pick ${ordinal(position)} player`}
           </span>
         ) : (
-          /* ── Active empty: inline search ── */
           <>
             <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -106,18 +118,25 @@ const SlotDropdown = ({ position, options, value, onSelect, onClear, disabled, i
         )}
       </div>
 
-      {/* Dropdown list — absolutely positioned below the row */}
       {open && filtered.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-lg overflow-hidden z-20 shadow-2xl max-h-44 overflow-y-auto">
-          {filtered.map((name) => (
-            <button
-              key={name}
-              onMouseDown={() => select(name)}
-              className="w-full text-left px-3 py-2.5 text-sm text-gray-300 hover:bg-[#FF6800]/10 hover:text-white transition-colors cursor-pointer border-b border-[#2A2A2A] last:border-0"
-            >
-              {name}
-            </button>
-          ))}
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-lg overflow-hidden z-20 shadow-2xl max-h-52 overflow-y-auto">
+          {filtered.map((name) => {
+            const t = playerToTeam?.[name];
+            return (
+              <button
+                key={name}
+                onMouseDown={() => select(name)}
+                className="w-full text-left px-3 py-2.5 hover:bg-[#FF6800]/10 transition-colors cursor-pointer border-b border-[#2A2A2A] last:border-0 flex items-center justify-between gap-2"
+              >
+                <span className="text-sm text-gray-200 truncate">{name}</span>
+                {t && (
+                  <span className="text-[11px] text-gray-500 bg-[#2A2A2A] px-1.5 py-0.5 rounded shrink-0">
+                    {t}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
       {open && search && filtered.length === 0 && (
@@ -137,13 +156,18 @@ interface CategoryCardProps {
   value: string[];
   onChange: (v: string[]) => void;
   disabled: boolean;
+  playerToTeam?: Record<string, string>;
 }
 
-const CategoryCard = ({ category, options, value, onChange, disabled }: CategoryCardProps) => {
+const CategoryCard = ({ category, options, value, onChange, disabled, playerToTeam }: CategoryCardProps) => {
   const isTeam = category.type === 'team_position';
   const count = category.selectionCount;
   const isFull = value.length >= count;
   const complete = value.length === count;
+
+  const dragIdx = useRef<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
 
   const toggleTeam = (name: string) => {
     if (value.includes(name)) {
@@ -161,6 +185,32 @@ const CategoryCard = ({ category, options, value, onChange, disabled }: Category
 
   const clearSlot = (idx: number) => {
     onChange(value.filter((_, i) => i !== idx));
+  };
+
+  const handleDragStart = (idx: number) => {
+    dragIdx.current = idx;
+    setDraggingIdx(idx);
+  };
+
+  const handleDrop = (targetIdx: number) => {
+    const src = dragIdx.current;
+    if (src === null || src === targetIdx) return;
+    const next = [...value];
+    // Extend array to cover both indices with empty strings if needed
+    while (next.length <= Math.max(src, targetIdx)) next.push('');
+    [next[src], next[targetIdx]] = [next[targetIdx], next[src]];
+    // Remove trailing empty strings
+    while (next.length > 0 && next[next.length - 1] === '') next.pop();
+    onChange(next);
+    dragIdx.current = null;
+    setDraggingIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    dragIdx.current = null;
+    setDraggingIdx(null);
+    setDragOverIdx(null);
   };
 
   return (
@@ -210,22 +260,53 @@ const CategoryCard = ({ category, options, value, onChange, disabled }: Category
           })}
         </div>
       ) : (
-        /* ── Per-slot player dropdowns ── */
+        /* ── Per-slot player dropdowns with drag-to-reorder ── */
         <div className="flex flex-col gap-2">
+          {complete && !disabled && (
+            <p className="text-[11px] text-gray-600 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+              </svg>
+              Drag to reorder
+            </p>
+          )}
           {Array.from({ length: count }).map((_, i) => {
             const otherPicks = value.filter((_, j) => j !== i);
             const slotOptions = options.filter((o) => !otherPicks.includes(o));
+            const isFilled = !!value[i];
+            const canDrag = !disabled && isFilled;
             return (
-              <SlotDropdown
+              <div
                 key={i}
-                position={i + 1}
-                options={slotOptions}
-                value={value[i] ?? ''}
-                onSelect={(name) => setSlot(i, name)}
-                onClear={() => clearSlot(i)}
-                disabled={disabled}
-                isTeam={false}
-              />
+                draggable={canDrag}
+                onDragStart={canDrag ? () => handleDragStart(i) : undefined}
+                onDragOver={canDrag || dragIdx.current !== null ? (e) => { e.preventDefault(); setDragOverIdx(i); } : undefined}
+                onDragLeave={() => setDragOverIdx(null)}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={handleDragEnd}
+                className={`flex items-center gap-2 ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              >
+                {/* Drag handle */}
+                <div className={`shrink-0 transition-opacity ${canDrag ? 'opacity-30 hover:opacity-70' : 'opacity-0'}`}>
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <SlotDropdown
+                    position={i + 1}
+                    options={slotOptions}
+                    value={value[i] ?? ''}
+                    onSelect={(name) => setSlot(i, name)}
+                    onClear={() => clearSlot(i)}
+                    disabled={disabled}
+                    isTeam={false}
+                    playerToTeam={playerToTeam}
+                    isDragging={draggingIdx === i}
+                    isDragOver={dragOverIdx === i && draggingIdx !== i}
+                  />
+                </div>
+              </div>
             );
           })}
         </div>
@@ -281,6 +362,16 @@ export const Predictions = () => {
   const players = options?.players ?? [];
   const teams = options?.teams ?? [];
 
+  // Build player → team lookup from squads
+  const playerToTeam: Record<string, string> = {};
+  if (options?.squads) {
+    for (const [team, squad] of Object.entries(options.squads)) {
+      for (const player of squad) {
+        playerToTeam[player] = team;
+      }
+    }
+  }
+
   const tournamentStatus =
     group?.tournament && typeof group.tournament === 'object'
       ? (group.tournament as { status: string }).status
@@ -314,8 +405,6 @@ export const Predictions = () => {
 
   const loading = groupLoading || optionsLoading || predictionLoading;
 
-  // ── Loading ────────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
       <Layout>
@@ -344,8 +433,6 @@ export const Predictions = () => {
 
   const tournament = typeof group.tournament === 'object' ? group.tournament : null;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   return (
     <Layout>
       {showCelebration && (
@@ -356,10 +443,8 @@ export const Predictions = () => {
         />
       )}
 
-      {/* Extra bottom padding so sticky bar doesn't overlap content */}
       <div className="flex flex-col gap-6 pb-28">
 
-        {/* Back nav */}
         <Link
           to={`/groups/${groupId}`}
           className="text-gray-500 hover:text-gray-300 text-sm no-underline flex items-center gap-1.5 w-fit transition-colors"
@@ -370,15 +455,13 @@ export const Predictions = () => {
           {group.name}
         </Link>
 
-        {/* Page header */}
         <div>
-          <h1 className="text-white text-2xl font-bold">My Predictions</h1>
+          <h1 className="text-white text-2xl font-bold">Tournament Predictions</h1>
           <p className="text-gray-500 text-sm mt-1">
             {tournament?.name} · {categories.length} {categories.length === 1 ? 'category' : 'categories'}
           </p>
         </div>
 
-        {/* Status banners */}
         {submitted && (
           <div className="bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl px-4 py-3 text-sm flex items-center gap-2">
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -403,7 +486,6 @@ export const Predictions = () => {
           </div>
         )}
 
-        {/* Category cards */}
         {categories.map((cat) => (
           <CategoryCard
             key={cat._id}
@@ -412,6 +494,7 @@ export const Predictions = () => {
             value={picks[cat._id] ?? []}
             onChange={(v) => setPicks((p) => ({ ...p, [cat._id]: v }))}
             disabled={isLocked}
+            playerToTeam={playerToTeam}
           />
         ))}
 
@@ -422,7 +505,6 @@ export const Predictions = () => {
         )}
       </div>
 
-      {/* Sticky submit bar */}
       {!isLocked && (
         <div className="fixed bottom-0 left-0 right-0 bg-[#111111]/95 backdrop-blur-sm border-t border-[#2F2F2F] px-4 py-4 z-30">
           <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">

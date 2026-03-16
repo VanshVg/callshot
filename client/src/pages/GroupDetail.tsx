@@ -215,7 +215,7 @@ const EditPanel = ({ group, allCategories, onClose }: EditPanelProps) => {
       {/* Per-match predictions toggle */}
       <div className="flex items-center justify-between py-2">
         <div>
-          <p className="text-sm font-medium text-gray-300">Per-Match Predictions</p>
+          <p className="text-sm font-medium text-gray-300">Match Day Predictions</p>
           <p className="text-gray-600 text-xs mt-0.5">Members predict match winners, top players, and powerplay scores</p>
         </div>
         <button
@@ -452,7 +452,7 @@ export const GroupDetail = () => {
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-[#FF6800]/10 rounded-lg flex items-center justify-center text-xl flex-shrink-0">🎯</div>
               <div>
-                <p className="text-white font-semibold group-hover:text-[#FF6800] transition-colors">My Predictions</p>
+                <p className="text-white font-semibold group-hover:text-[#FF6800] transition-colors">Tournament Predictions</p>
                 <p className="text-gray-500 text-sm">Make or edit your picks</p>
               </div>
               <svg className="w-5 h-5 text-gray-600 group-hover:text-[#FF6800] ml-auto transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
@@ -475,7 +475,7 @@ export const GroupDetail = () => {
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 bg-[#FF6800]/10 rounded-lg flex items-center justify-center text-xl flex-shrink-0">🏏</div>
                 <div>
-                  <p className="text-white font-semibold group-hover:text-[#FF6800] transition-colors">Match Predictions</p>
+                  <p className="text-white font-semibold group-hover:text-[#FF6800] transition-colors">Match Day Predictions</p>
                   <p className="text-gray-500 text-sm">Predict each match's results</p>
                 </div>
                 <svg className="w-5 h-5 text-gray-600 group-hover:text-[#FF6800] ml-auto transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>

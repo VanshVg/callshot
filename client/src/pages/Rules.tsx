@@ -222,9 +222,9 @@ export const Rules = () => (
       </Section>
 
       {/* Match Predictions */}
-      <Section title="Per-Match Predictions (Optional)">
+      <Section title="Match Day Predictions (Optional)">
         <p className="text-gray-400 text-sm leading-relaxed">
-          Group admins can enable <span className="text-white font-medium">per-match predictions</span>.
+          Group admins can enable <span className="text-white font-medium">match day predictions</span>.
           Before each match starts, members predict: the winner, top batter, top bowler, Player of the Match,
           and powerplay scores for both teams.
         </p>
@@ -242,7 +242,7 @@ export const Rules = () => (
         <div className="flex flex-col gap-2">
           {[
             ['Tournament Points', 'Points from all season-long prediction categories + unused strategy cards.'],
-            ['Match Points', 'Points from per-match predictions (if enabled in your group).'],
+            ['Match Points', 'Points from match day predictions (if enabled in your group).'],
             ['Total Points', 'Sum of tournament + match points — this determines your final rank.'],
           ].map(([label, desc]) => (
             <div key={label} className="flex gap-3 bg-[#1E1E1E] border border-[#2F2F2F] rounded-lg px-4 py-3 items-start">

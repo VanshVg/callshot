@@ -208,7 +208,7 @@ export const GroupMatches = () => {
 
         {/* Header */}
         <div>
-          <h1 className="text-white text-2xl font-bold">Match Predictions</h1>
+          <h1 className="text-white text-2xl font-bold">Match Day Predictions</h1>
           <p className="text-gray-500 text-sm mt-1">
             {tournament?.name} · {matches.length} match{matches.length !== 1 ? 'es' : ''}
           </p>

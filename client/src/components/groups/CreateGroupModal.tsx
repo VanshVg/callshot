@@ -253,7 +253,7 @@ export const CreateGroupModal = ({ open, onClose }: Props) => {
         {/* Per-match predictions toggle */}
         <div className="flex items-center justify-between py-1">
           <div>
-            <p className="text-sm font-medium text-gray-300">Per-Match Predictions</p>
+            <p className="text-sm font-medium text-gray-300">Match Day Predictions</p>
             <p className="text-gray-600 text-xs mt-0.5">Members predict each match's results for extra points</p>
           </div>
           <button

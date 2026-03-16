@@ -252,7 +252,7 @@ const EntryRow = ({ entry, maxPts }: { entry: LeaderboardEntry; maxPts: number }
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm">⚡</span>
-                    <p className="text-gray-300 text-xs font-semibold">Match Predictions</p>
+                    <p className="text-gray-300 text-xs font-semibold">Match Day Predictions</p>
                   </div>
                   <span className="text-xs font-bold text-green-400 bg-green-400/10 border border-green-400/20 px-2 py-0.5 rounded-full">
                     +{entry.matchPoints}
