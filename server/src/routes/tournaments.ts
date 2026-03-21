@@ -15,7 +15,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     return;
   }
   // Categories are sport-level, not tournament-specific
-  const categories = await Category.find({ sport: tournament.sport }).sort({ order: 1 });
+  const categories = await Category.find({ sport: tournament.sport || 'cricket' }).sort({ order: 1 });
   res.json({ tournament, categories });
 });
 

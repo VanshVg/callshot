@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body } from 'express-validator';
 import { validationResult } from 'express-validator';
 import { Prediction, Group, Tournament, StrategyCard } from '../models/index';
+import User from '../models/User';
 import { protect } from '../middleware/auth';
 import { AuthRequest } from '../types/index';
 
@@ -91,6 +92,39 @@ router.get('/:groupId/:tournamentId/all', async (req: AuthRequest, res: Response
     .populate('user', 'name username')
     .populate('picks.category', 'name type');
   res.json({ predictions });
+});
+
+// GET /api/predictions/:groupId/submission-status
+// Returns which group members have submitted predictions (only visible before tournament starts)
+router.get('/:groupId/submission-status', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { groupId } = req.params as { groupId: string };
+
+  const group = await Group.findById(groupId);
+  if (!group) { res.status(404).json({ message: 'Group not found' }); return; }
+  const isMember = group.members.some((m) => m.toString() === req.user!.id);
+  if (!isMember) { res.status(403).json({ message: 'Not a member of this group' }); return; }
+
+  const tournament = await Tournament.findById(group.tournament);
+  if (!tournament) { res.status(404).json({ message: 'Tournament not found' }); return; }
+
+  // Fetch all members with their names
+  const members = await User.find({ _id: { $in: group.members } }, 'name username');
+
+  // Find who has submitted
+  const submissions = await Prediction.find(
+    { group: groupId, tournament: group.tournament },
+    'user submittedAt',
+  );
+  const submittedUserIds = new Set(submissions.map((p) => p.user.toString()));
+
+  const status = members.map((m) => ({
+    userId: m._id.toString(),
+    name: m.name,
+    username: m.username,
+    submitted: submittedUserIds.has(m._id.toString()),
+  }));
+
+  res.json({ status, totalMembers: members.length, submitted: submittedUserIds.size });
 });
 
 export default router;

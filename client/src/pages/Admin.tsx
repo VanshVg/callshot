@@ -1,9 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Layout } from '../components/common/Layout';
 import { Button } from '../components/common/Button';
 import {
   useGetAdminTournamentsQuery,
-  useGetTournamentCategoriesQuery,
+  useGetAdminCategoriesQuery,
+  useUpdateAdminCategoryMutation,
+  useGetCategoriesQuery,
   useGetMatchesQuery,
   useGetAdminResultsQuery,
   useGetTournamentOptionsQuery,
@@ -16,6 +19,7 @@ import {
   useCreateAdminMatchMutation,
   useBulkCreateMatchesMutation,
   useDeleteAdminMatchMutation,
+  useDeleteAdminTournamentMutation,
 } from '../store/api';
 import type { Match, Category, Tournament } from '../types/index';
 
@@ -185,7 +189,9 @@ const TournamentForm = ({ existing, onDone }: { existing?: Tournament; onDone: (
           <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. IPL 2025" className={`${textInputCls} sm:col-span-2`} />
         </Field>
         <Field label="Sport">
-          <input value={form.sport} onChange={(e) => set('sport', e.target.value)} placeholder="cricket" className={textInputCls} />
+          <select value={form.sport} onChange={(e) => set('sport', e.target.value)} className={textInputCls}>
+            <option value="cricket">Cricket</option>
+          </select>
         </Field>
         <Field label="Format / Type">
           <input value={form.type} onChange={(e) => set('type', e.target.value)} placeholder="T20" className={textInputCls} />
@@ -924,6 +930,12 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
   const [error, setError] = useState('');
   const [setActualResult, { isLoading }] = useSetActualResultMutation();
 
+  // Sync when result loads asynchronously after mount (e.g. on page reload)
+  useEffect(() => {
+    setGroups(buildInitGroups(result, maxSlots));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
   // Dense ranking: group[0] = rank 1, group[1] = rank 2, etc.
   // Tied players share the same rank; the next rank is always groupIdx + 1.
   const getPosition = (groupIdx: number) => groupIdx + 1;
@@ -1060,98 +1072,157 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
   );
 };
 
-// ── Admin Page ─────────────────────────────────────────────────────────────────
+// ── Tournament Detail View ──────────────────────────────────────────────────────
 
-type AdminTab = 'tournaments' | 'schedule' | 'matches' | 'results';
+type DetailTab = 'schedule' | 'matches' | 'results' | 'squads';
 
-export const Admin = () => {
-  const [tab, setTab] = useState<AdminTab>('tournaments');
-  const [selectedTournamentId, setSelectedTournamentId] = useState('');
-  const [tournamentStatusValue, setTournamentStatusValue] = useState('');
+const TournamentDetail = ({
+  tournament,
+  allTournaments,
+}: {
+  tournament: Tournament;
+  allTournaments: Tournament[];
+}) => {
+  const navigate = useNavigate();
+  const { tab: tabParam } = useParams<{ tab?: string }>();
+  const tab = (tabParam as DetailTab | undefined) ?? 'schedule';
+  const setTab = (t: DetailTab) => navigate(`/admin/tournaments/${tournament._id}/${t}`, { replace: true });
+
+  const [tournamentStatusValue, setTournamentStatusValue] = useState<string>(tournament.status);
   const [statusSaved, setStatusSaved] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
-  const [expandedSquadsId, setExpandedSquadsId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteAdminTournament, { isLoading: deleting }] = useDeleteAdminTournamentMutation();
 
-  const { data: tournaments = [], isLoading: tournamentsLoading } = useGetAdminTournamentsQuery();
-  const activeTournamentId = selectedTournamentId || tournaments[0]?._id || '';
-  const activeTournament = tournaments.find((t) => t._id === activeTournamentId);
+  const { data: matches = [], isLoading: matchesLoading } = useGetMatchesQuery(tournament._id, {
+    skip: tab !== 'matches' && tab !== 'schedule',
+  });
+  // Categories are sport-level — use the sport-level endpoint, not per-tournament
+  const { data: categories = [], isLoading: categoriesLoading } = useGetCategoriesQuery(
+    (tournament.sport as 'cricket') || 'cricket',
+    { skip: tab !== 'results' },
+  );
 
-  const { data: matches = [], isLoading: matchesLoading } = useGetMatchesQuery(activeTournamentId, {
-    skip: !activeTournamentId || tab !== 'matches',
+  const { data: actualResults = [] } = useGetAdminResultsQuery(tournament._id, {
+    skip: tab !== 'results',
   });
-  const { data: categories = [], isLoading: categoriesLoading } = useGetTournamentCategoriesQuery(activeTournamentId, {
-    skip: !activeTournamentId || tab !== 'results',
-  });
-  const { data: actualResults = [] } = useGetAdminResultsQuery(activeTournamentId, {
-    skip: !activeTournamentId || tab !== 'results',
-  });
-  const { data: tournamentOptions } = useGetTournamentOptionsQuery(activeTournamentId, {
-    skip: !activeTournamentId,
-  });
+  const { data: tournamentOptions } = useGetTournamentOptionsQuery(tournament._id);
   const [setTournamentStatus, { isLoading: statusLoading }] = useSetTournamentStatusMutation();
 
   const handleTournamentStatus = async () => {
-    if (!tournamentStatusValue) return;
-    await setTournamentStatus({ id: activeTournamentId, status: tournamentStatusValue });
+    if (!tournamentStatusValue || tournamentStatusValue === tournament.status) return;
+    await setTournamentStatus({ id: tournament._id, status: tournamentStatusValue });
     setStatusSaved(true);
     setTimeout(() => setStatusSaved(false), 2000);
   };
 
-  const tabs: { id: AdminTab; label: string }[] = [
-    { id: 'tournaments', label: '🏆 Tournaments' },
+  const handleDelete = async () => {
+    await deleteAdminTournament(tournament._id).unwrap();
+    navigate('/admin', { replace: true });
+  };
+
+  const detailTabs: { id: DetailTab; label: string }[] = [
     { id: 'schedule', label: '📅 Schedule' },
     { id: 'matches', label: '🏏 Match Results' },
     { id: 'results', label: '📊 Tournament Results' },
+    { id: 'squads', label: '👥 Squads' },
   ];
+
+  const statusColors: Record<string, string> = {
+    live: 'text-green-400 bg-green-400/10 border-green-400/20',
+    completed: 'text-gray-400 bg-gray-400/10 border-gray-400/20',
+    upcoming: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  };
 
   return (
     <Layout>
       <div className="flex flex-col gap-6">
-        {/* Header */}
+        {/* Back + header */}
         <div>
-          <h1 className="text-white text-2xl font-bold">Admin Panel</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage tournaments, matches, and results</p>
-        </div>
-
-        {/* Tournament selector + status */}
-        <div className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl p-5 flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 flex flex-col gap-1.5">
-            <label className="text-gray-400 text-xs font-medium">Active Tournament</label>
-            {tournamentsLoading ? (
-              <div className="h-9 bg-[#2A2A2A] rounded-lg animate-pulse" />
-            ) : (
-              <select value={activeTournamentId} onChange={(e) => setSelectedTournamentId(e.target.value)}
-                className="bg-[#111] border border-[#2F2F2F] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#FF6800] transition-colors">
-                {tournaments.map((t) => (
-                  <option key={t._id} value={t._id}>{t.name} ({t.status})</option>
-                ))}
-              </select>
-            )}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-gray-400 text-xs font-medium">Tournament Status</label>
-            <div className="flex gap-2">
-              <select value={tournamentStatusValue} onChange={(e) => setTournamentStatusValue(e.target.value)}
-                className="bg-[#111] border border-[#2F2F2F] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#FF6800] transition-colors">
-                <option value="">— Change status —</option>
+          <button
+            onClick={() => navigate('/admin')}
+            className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-sm transition-colors cursor-pointer mb-4"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            All Tournaments
+          </button>
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-white text-2xl font-bold">{tournament.name}</h1>
+                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusColors[tournament.status] ?? statusColors.upcoming}`}>
+                  {tournament.status}
+                </span>
+              </div>
+              <p className="text-gray-500 text-sm mt-1">
+                {tournament.sport} · {tournament.type} · Season {tournament.season} ·{' '}
+                {new Date(tournament.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} –{' '}
+                {new Date(tournament.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+            {/* Status changer + delete */}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <select
+                value={tournamentStatusValue}
+                onChange={(e) => setTournamentStatusValue(e.target.value)}
+                className="bg-[#111] border border-[#2F2F2F] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#FF6800] transition-colors"
+              >
                 <option value="upcoming">upcoming</option>
                 <option value="live">live</option>
                 <option value="completed">completed</option>
               </select>
-              <Button loading={statusLoading} disabled={!tournamentStatusValue} onClick={handleTournamentStatus} variant="secondary">
+              <Button loading={statusLoading} disabled={tournamentStatusValue === tournament.status} onClick={handleTournamentStatus} variant="secondary">
                 {statusSaved ? 'Saved!' : 'Apply'}
               </Button>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-3 py-2 text-sm text-red-400 border border-red-400/30 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
+              >
+                Delete
+              </button>
             </div>
-            {activeTournament && (
-              <p className="text-gray-600 text-xs">Current: <span className="text-gray-400">{activeTournament.status}</span></p>
-            )}
           </div>
         </div>
 
+        {/* Delete confirmation modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
+            <div className="relative bg-[#1E1E1E] border border-[#2F2F2F] rounded-2xl p-6 w-full max-w-sm z-10 shadow-2xl">
+              {/* Icon */}
+              <div className="w-12 h-12 rounded-full bg-red-500/15 border border-red-500/25 flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-white font-bold text-lg mb-1">Delete tournament?</h3>
+              <p className="text-gray-400 text-sm mb-1 leading-relaxed">
+                <span className="text-white font-medium">{tournament.name}</span> and all its matches and results will be permanently removed.
+              </p>
+              <p className="text-red-400 text-xs mb-6">This action cannot be undone.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="w-full py-2.5 text-sm font-medium text-gray-300 bg-[#2A2A2A] hover:bg-[#333] border border-[#3A3A3A] rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="w-full py-2.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 rounded-xl transition-colors cursor-pointer"
+                >
+                  {deleting ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl p-1 overflow-x-auto">
-          {tabs.map((t) => (
+          {detailTabs.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
                 tab === t.id ? 'bg-[#FF6800] text-white' : 'text-gray-400 hover:text-white'
@@ -1161,119 +1232,18 @@ export const Admin = () => {
           ))}
         </div>
 
-        {/* ── Tournaments tab ── */}
-        {tab === 'tournaments' && (
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-end">
-              <Button onClick={() => { setShowCreateForm(true); setEditingTournament(null); }}>+ New Tournament</Button>
-            </div>
-
-            {(showCreateForm && !editingTournament) && (
-              <TournamentForm onDone={() => setShowCreateForm(false)} />
-            )}
-            {editingTournament && (
-              <TournamentForm existing={editingTournament} onDone={() => setEditingTournament(null)} />
-            )}
-
-            {tournamentsLoading ? (
-              <div className="flex flex-col gap-3">{[1,2].map((n) => <div key={n} className="h-20 bg-[#1E1E1E] rounded-xl animate-pulse" />)}</div>
-            ) : tournaments.length === 0 ? (
-              <div className="text-center py-12 text-gray-500 text-sm">No tournaments yet — create one above.</div>
-            ) : (
-              tournaments.map((t) => {
-                const squadsOpen = expandedSquadsId === t._id;
-                const teamCount = (t.teams ?? []).length;
-                return (
-                  <div key={t._id} className={`bg-[#1A1A1A] border rounded-xl overflow-hidden transition-colors ${squadsOpen ? 'border-[#FF6800]/30' : 'border-[#2F2F2F]'}`}>
-                    {/* Card header */}
-                    <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-white font-semibold">{t.name}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                            t.status === 'live' ? 'text-green-400 bg-green-400/10 border-green-400/20' :
-                            t.status === 'completed' ? 'text-gray-400 bg-gray-400/10 border-gray-400/20' :
-                            'text-blue-400 bg-blue-400/10 border-blue-400/20'
-                          }`}>{t.status}</span>
-                        </div>
-                        <p className="text-gray-500 text-xs mt-0.5">
-                          {t.sport} · {t.type} · Season {t.season} ·{' '}
-                          {new Date(t.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} –{' '}
-                          {new Date(t.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </p>
-                        <p className="text-gray-600 text-xs mt-0.5">{t.totalMatches} matches</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Squads pill — shows team count, click to expand */}
-                        <button
-                          onClick={() => setExpandedSquadsId(squadsOpen ? null : t._id)}
-                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            squadsOpen
-                              ? 'border-[#FF6800]/50 text-[#FF6800] bg-[#FF6800]/10'
-                              : teamCount > 0
-                              ? 'border-[#2F2F2F] text-gray-300 hover:border-[#FF6800]/50 hover:text-[#FF6800]'
-                              : 'border-dashed border-[#3A3A3A] text-gray-500 hover:border-[#FF6800]/50 hover:text-[#FF6800]'
-                          }`}
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          {teamCount > 0 ? `${teamCount} teams` : 'No squads'}
-                          <svg className={`w-3 h-3 transition-transform ${squadsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => { setEditingTournament(t); setShowCreateForm(false); setExpandedSquadsId(null); }}
-                          className="text-gray-400 hover:text-white text-xs px-3 py-1.5 border border-[#2F2F2F] rounded-lg hover:border-[#3A3A3A] cursor-pointer transition-colors"
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Inline squads manager */}
-                    {squadsOpen && (
-                      <div className="border-t border-[#2F2F2F] px-5 pb-5 pt-4 bg-[#111]/40">
-                        <div className="mb-4">
-                          <p className="text-white font-semibold text-sm">Teams & Squads</p>
-                          <p className="text-gray-500 text-xs mt-0.5">
-                            These players are specific to <span className="text-gray-300">{t.name}</span> — other tournaments have their own independent squads.
-                          </p>
-                        </div>
-                        <SquadsManager key={t._id} tournament={t} allTournaments={tournaments} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
         {/* ── Schedule tab ── */}
         {tab === 'schedule' && (
-          <div className="flex flex-col gap-3">
-            {!activeTournamentId ? (
-              <p className="text-gray-500 text-sm text-center py-8">No tournament selected.</p>
-            ) : (
-              <MatchSchedule
-                tournamentId={activeTournamentId}
-                teams={activeTournament?.teams ?? []}
-              />
-            )}
-          </div>
+          <MatchSchedule tournamentId={tournament._id} teams={tournament.teams ?? []} />
         )}
 
         {/* ── Match results tab ── */}
         {tab === 'matches' && (
           <div className="flex flex-col gap-3">
-            {!activeTournamentId ? (
-              <p className="text-gray-500 text-sm text-center py-8">No tournaments found.</p>
-            ) : matchesLoading ? (
+            {matchesLoading ? (
               <div className="flex flex-col gap-3">{[1,2,3].map((n) => <div key={n} className="h-16 bg-[#1E1E1E] rounded-xl animate-pulse" />)}</div>
             ) : matches.length === 0 ? (
-              <div className="text-center py-12 text-gray-500 text-sm">No matches. Add them in the Schedule tab.</div>
+              <div className="text-center py-12 text-gray-500 text-sm">No matches yet — add them in the Schedule tab.</div>
             ) : (
               matches.map((match) => {
                 const squads = tournamentOptions?.squads ?? {};
@@ -1287,9 +1257,10 @@ export const Admin = () => {
         {/* ── Tournament results tab ── */}
         {tab === 'results' && (
           <div className="flex flex-col gap-3">
-            {!activeTournamentId ? (
-              <p className="text-gray-500 text-sm text-center py-8">No tournaments found.</p>
-            ) : categoriesLoading ? (
+            <div className="bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl px-4 py-3 text-xs text-gray-400">
+              Results can be entered at any time — leaderboard updates in real time.
+            </div>
+            {categoriesLoading ? (
               <div className="flex flex-col gap-3">{[1,2,3].map((n) => <div key={n} className="h-16 bg-[#1E1E1E] rounded-xl animate-pulse" />)}</div>
             ) : categories.length === 0 ? (
               <div className="text-center py-12 text-gray-500 text-sm">No categories for this tournament.</div>
@@ -1299,7 +1270,7 @@ export const Admin = () => {
                 .map((cat) => (
                   <CategoryRow key={cat._id} category={cat}
                     result={actualResults.find((r) => r.category._id === cat._id)}
-                    tournamentId={activeTournamentId}
+                    tournamentId={tournament._id}
                     options={cat.type === 'team_position'
                       ? (tournamentOptions?.teams ?? [])
                       : (tournamentOptions?.players ?? [])} />
@@ -1307,7 +1278,266 @@ export const Admin = () => {
             )}
           </div>
         )}
+
+        {/* ── Squads tab ── */}
+        {tab === 'squads' && (
+          <div className="flex flex-col gap-3">
+            <p className="text-gray-500 text-xs">
+              These players are specific to <span className="text-gray-300">{tournament.name}</span> — other tournaments have their own independent squads.
+            </p>
+            <SquadsManager key={tournament._id} tournament={tournament} allTournaments={allTournaments} />
+          </div>
+        )}
+
+
       </div>
     </Layout>
   );
+};
+
+// ── Categories Manager ─────────────────────────────────────────────────────────
+
+const CategoryEditor = ({ category }: { category: Category }) => {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: category.name,
+    description: category.description ?? '',
+    type: category.type,
+    selectionCount: category.selectionCount,
+    scoringType: category.scoringType,
+    order: category.order ?? 0,
+  });
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const [updateCategory, { isLoading }] = useUpdateAdminCategoryMutation();
+
+  const set = (key: string, val: string | number) => setForm((f) => ({ ...f, [key]: val }));
+
+  const handleSave = async () => {
+    setError(''); setSaved(false);
+    try {
+      await updateCategory({ id: category._id, body: { ...form } }).unwrap();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setError('Failed to save');
+    }
+  };
+
+  return (
+    <div className="bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left cursor-pointer hover:bg-[#222] transition-colors"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="text-gray-600 text-xs font-mono shrink-0">#{category.order ?? 0}</span>
+          <span className="text-white text-sm font-medium truncate">{category.name}</span>
+          <span className="text-gray-500 text-xs shrink-0">{category.selectionCount} picks · {category.scoringType}</span>
+        </div>
+        <svg className={`w-4 h-4 text-gray-500 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-5 border-t border-[#2F2F2F] pt-4 flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Name">
+              <input value={form.name} onChange={(e) => set('name', e.target.value)} className={textInputCls} />
+            </Field>
+            <Field label="Order (display position)">
+              <input type="number" value={form.order} onChange={(e) => set('order', Number(e.target.value))} className={textInputCls} />
+            </Field>
+            <Field label="Type">
+              <select value={form.type} onChange={(e) => set('type', e.target.value)} className={textInputCls}>
+                <option value="player_stat">player_stat</option>
+                <option value="team_position">team_position</option>
+                <option value="single_player">single_player</option>
+              </select>
+            </Field>
+            <Field label="Scoring Type">
+              <select value={form.scoringType} onChange={(e) => set('scoringType', e.target.value)} className={textInputCls}>
+                <option value="positional">positional</option>
+                <option value="exact_match">exact_match</option>
+              </select>
+            </Field>
+            <Field label="Selection Count (picks per member)">
+              <input type="number" min={1} max={10} value={form.selectionCount} onChange={(e) => set('selectionCount', Number(e.target.value))} className={textInputCls} />
+            </Field>
+            <Field label="Description">
+              <input value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Short description shown to users" className={textInputCls} />
+            </Field>
+          </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+          {saved && <p className="text-green-400 text-xs">Saved!</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button loading={isLoading} onClick={handleSave}>Save Category</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CategoriesManager = () => {
+  const [open, setOpen] = useState(false);
+  const { data: categories = [], isLoading } = useGetAdminCategoriesQuery('cricket', { skip: !open });
+
+  return (
+    <div className="border border-[#2F2F2F] rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-5 py-4 flex items-center justify-between gap-3 bg-[#1A1A1A] hover:bg-[#222] transition-colors cursor-pointer"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-white font-semibold text-sm">Prediction Categories</span>
+          <span className="text-gray-500 text-xs">Cricket · {open && categories.length > 0 ? `${categories.length} categories` : 'sport-level settings'}</span>
+        </div>
+        <svg className={`w-4 h-4 text-gray-500 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="border-t border-[#2F2F2F] p-4 flex flex-col gap-2 bg-[#111]/40">
+          <p className="text-gray-500 text-xs pb-1">
+            These categories apply to all cricket groups. Changes here affect prediction options for new and existing groups.
+          </p>
+          {isLoading ? (
+            <div className="flex flex-col gap-2">{[1,2,3].map((n) => <div key={n} className="h-14 bg-[#1E1E1E] rounded-xl animate-pulse" />)}</div>
+          ) : categories.length === 0 ? (
+            <p className="text-gray-600 text-sm text-center py-6">No categories found. Run the seed script to create them.</p>
+          ) : (
+            categories.map((cat) => <CategoryEditor key={cat._id} category={cat} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Admin Page (Tournament List) ───────────────────────────────────────────────
+
+export const Admin = () => {
+  const navigate = useNavigate();
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
+
+  const { data: tournaments = [], isLoading: tournamentsLoading } = useGetAdminTournamentsQuery();
+
+  return (
+    <Layout>
+      <div className="flex flex-col gap-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-white text-2xl font-bold">Admin Panel</h1>
+            <p className="text-gray-500 text-sm mt-1">Manage tournaments, matches, and results</p>
+          </div>
+          <Button onClick={() => { setShowCreateForm(true); setEditingTournament(null); }}>
+            + New Tournament
+          </Button>
+        </div>
+
+        {/* Create / edit form */}
+        {(showCreateForm && !editingTournament) && (
+          <TournamentForm onDone={() => setShowCreateForm(false)} />
+        )}
+        {editingTournament && (
+          <TournamentForm existing={editingTournament} onDone={() => setEditingTournament(null)} />
+        )}
+
+        {/* Tournament list */}
+        {tournamentsLoading ? (
+          <div className="flex flex-col gap-3">{[1,2].map((n) => <div key={n} className="h-20 bg-[#1E1E1E] rounded-xl animate-pulse" />)}</div>
+        ) : tournaments.length === 0 ? (
+          <div className="text-center py-16 text-gray-500 text-sm">No tournaments yet — create one above.</div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {tournaments.map((t) => {
+              const teamCount = (t.teams ?? []).length;
+              return (
+                <div key={t._id} className="bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-white font-semibold">{t.name}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                        t.status === 'live' ? 'text-green-400 bg-green-400/10 border-green-400/20' :
+                        t.status === 'completed' ? 'text-gray-400 bg-gray-400/10 border-gray-400/20' :
+                        'text-blue-400 bg-blue-400/10 border-blue-400/20'
+                      }`}>{t.status}</span>
+                    </div>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {t.sport} · {t.type} · Season {t.season} ·{' '}
+                      {new Date(t.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} –{' '}
+                      {new Date(t.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                    <p className="text-gray-600 text-xs mt-0.5">
+                      {t.totalMatches} matches · {teamCount > 0 ? `${teamCount} teams` : 'No squads yet'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => { setEditingTournament(t); setShowCreateForm(false); }}
+                      className="text-gray-400 hover:text-white text-xs px-3 py-1.5 border border-[#2F2F2F] rounded-lg hover:border-[#3A3A3A] cursor-pointer transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => { navigate(`/admin/tournaments/${t._id}`); setEditingTournament(null); }}
+                      className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-lg bg-[#FF6800] hover:bg-[#e05e00] text-white font-medium transition-colors cursor-pointer"
+                    >
+                      Manage
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Categories section */}
+        <CategoriesManager />
+      </div>
+    </Layout>
+  );
+};
+
+// ── AdminTournamentDetail (URL-driven wrapper) ─────────────────────────────────
+
+export const AdminTournamentDetail = () => {
+  const { tournamentId } = useParams<{ tournamentId: string }>();
+  const navigate = useNavigate();
+  const { data: tournaments = [], isLoading } = useGetAdminTournamentsQuery();
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="animate-pulse flex flex-col gap-5">
+          <div className="h-4 bg-[#222] rounded w-24" />
+          <div className="h-10 bg-[#1E1E1E] rounded-xl" />
+          <div className="h-48 bg-[#1E1E1E] rounded-xl" />
+        </div>
+      </Layout>
+    );
+  }
+
+  const tournament = tournaments.find((t) => t._id === tournamentId);
+  if (!tournament) {
+    return (
+      <Layout>
+        <div className="text-center py-20 flex flex-col items-center gap-3">
+          <p className="text-gray-400">Tournament not found.</p>
+          <button onClick={() => navigate('/admin')} className="text-[#FF6800] text-sm cursor-pointer hover:text-[#ff8533]">← All Tournaments</button>
+        </div>
+      </Layout>
+    );
+  }
+
+  return <TournamentDetail tournament={tournament} allTournaments={tournaments} />;
 };

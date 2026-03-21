@@ -89,6 +89,7 @@ const SwapForm = ({
   groupId: string; tournamentId: string;
   onDone: () => void; onCancel: () => void;
 }) => {
+  const [swapMode, setSwapMode] = useState<'replace' | 'reorder'>('replace');
   const [categoryId, setCategoryId] = useState('');
   const [oldSelection, setOldSelection] = useState('');
   const [newSelection, setNewSelection] = useState('');
@@ -100,10 +101,13 @@ const SwapForm = ({
   const currentPicks = selectedCat?.selections ?? [];
   const playerPool = isTeam ? options.teams : options.players;
 
-  // Exclude other current picks (except the one being replaced)
-  const newOptions = playerPool.filter(
+  // Replace mode: exclude current picks (except the one being swapped out)
+  const replaceOptions = playerPool.filter(
     (p) => !currentPicks.includes(p) || p === oldSelection,
   ).filter((p) => p !== oldSelection);
+
+  // Reorder mode: second pick must be different from first
+  const reorderSecondOptions = currentPicks.filter((p) => p !== oldSelection);
 
   const handleSubmit = async () => {
     if (!categoryId || !oldSelection || !newSelection) {
@@ -121,6 +125,21 @@ const SwapForm = ({
 
   return (
     <div className="flex flex-col gap-4 pt-4 border-t border-[#2F2F2F]">
+      {/* Mode toggle */}
+      <div className="flex gap-1 bg-[#111] rounded-lg p-0.5">
+        {(['replace', 'reorder'] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => { setSwapMode(m); setOldSelection(''); setNewSelection(''); setError(''); }}
+            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+              swapMode === m ? 'bg-[#2A2A2A] text-white' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {m === 'replace' ? '🔄 Replace a Pick' : '↕️ Reorder Picks'}
+          </button>
+        ))}
+      </div>
+
       {/* Category */}
       <div className="flex flex-col gap-1.5">
         <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Category</label>
@@ -136,33 +155,73 @@ const SwapForm = ({
         </select>
       </div>
 
-      {/* Player to replace */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Replace</label>
-        <select
-          value={oldSelection}
-          onChange={(e) => { setOldSelection(e.target.value); setNewSelection(''); }}
-          disabled={!categoryId}
-          className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
-        >
-          <option value="">Select current pick…</option>
-          {currentPicks.map((sel) => (
-            <option key={sel} value={sel}>{sel}</option>
-          ))}
-        </select>
-      </div>
+      {swapMode === 'replace' ? (
+        <>
+          {/* Player to replace */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Replace</label>
+            <select
+              value={oldSelection}
+              onChange={(e) => { setOldSelection(e.target.value); setNewSelection(''); }}
+              disabled={!categoryId}
+              className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
+            >
+              <option value="">Select current pick…</option>
+              {currentPicks.map((sel) => (
+                <option key={sel} value={sel}>{sel}</option>
+              ))}
+            </select>
+          </div>
 
-      {/* New player */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">With</label>
-        <SearchDrop
-          options={newOptions}
-          value={newSelection}
-          onChange={setNewSelection}
-          placeholder={isTeam ? 'Search teams…' : 'Search players…'}
-          disabled={!oldSelection}
-        />
-      </div>
+          {/* New player */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">With</label>
+            <SearchDrop
+              options={replaceOptions}
+              value={newSelection}
+              onChange={setNewSelection}
+              placeholder={isTeam ? 'Search teams…' : 'Search players…'}
+              disabled={!oldSelection}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Reorder: pick first player */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Move</label>
+            <select
+              value={oldSelection}
+              onChange={(e) => { setOldSelection(e.target.value); setNewSelection(''); }}
+              disabled={!categoryId}
+              className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
+            >
+              <option value="">Select a pick…</option>
+              {currentPicks.map((sel, i) => (
+                <option key={sel} value={sel}>#{i + 1} {sel}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Reorder: pick second player to swap with */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Swap position with</label>
+            <select
+              value={newSelection}
+              onChange={(e) => setNewSelection(e.target.value)}
+              disabled={!oldSelection}
+              className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
+            >
+              <option value="">Select a pick to swap with…</option>
+              {reorderSecondOptions.map((sel) => {
+                const idx = currentPicks.indexOf(sel);
+                return <option key={sel} value={sel}>#{idx + 1} {sel}</option>;
+              })}
+            </select>
+            <p className="text-gray-600 text-xs">Their positions will be swapped — no player is removed.</p>
+          </div>
+        </>
+      )}
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
 

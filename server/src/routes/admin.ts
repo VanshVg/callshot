@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import { ActualResult, Tournament, Category, Match } from '../models/index';
+import { ActualResult, Tournament, Category, Match, Group } from '../models/index';
+import CategoryModel from '../models/Category';
+import StrategyCard from '../models/StrategyCard';
 import { protect, adminOnly } from '../middleware/auth';
 import { AuthRequest } from '../types/index';
 
@@ -60,6 +62,15 @@ router.put('/tournaments/:id/status', async (req: Request, res: Response): Promi
   res.json({ tournament });
 });
 
+router.delete('/tournaments/:id', async (req: Request, res: Response): Promise<void> => {
+  const tournament = await Tournament.findByIdAndDelete(req.params['id']);
+  if (!tournament) { res.status(404).json({ message: 'Tournament not found' }); return; }
+  // Clean up related data
+  await Match.deleteMany({ tournament: req.params['id'] });
+  await ActualResult.deleteMany({ tournament: req.params['id'] });
+  res.json({ message: 'Tournament deleted' });
+});
+
 // ── Teams & Squads ─────────────────────────────────────────────────────────────
 
 router.put('/tournaments/:id/squads', async (req: Request, res: Response): Promise<void> => {
@@ -75,6 +86,33 @@ router.put('/tournaments/:id/squads', async (req: Request, res: Response): Promi
   );
   if (!tournament) { res.status(404).json({ message: 'Tournament not found' }); return; }
   res.json({ tournament });
+});
+
+// ── Categories (admin) ─────────────────────────────────────────────────────────
+
+router.get('/categories', async (req: Request, res: Response): Promise<void> => {
+  const sport = (req.query['sport'] as string) || 'cricket';
+  const categories = await CategoryModel.find({ sport }).sort({ order: 1 });
+  res.json({ categories });
+});
+
+router.put('/categories/:id', async (req: Request, res: Response): Promise<void> => {
+  const { name, description, type, selectionCount, scoringType, order } = req.body as {
+    name?: string; description?: string;
+    type?: 'player_stat' | 'team_position' | 'single_player';
+    selectionCount?: number; scoringType?: 'positional' | 'exact_match'; order?: number;
+  };
+  const update: Record<string, unknown> = {};
+  if (name !== undefined) update.name = name;
+  if (description !== undefined) update.description = description;
+  if (type !== undefined) update.type = type;
+  if (selectionCount !== undefined) update.selectionCount = selectionCount;
+  if (scoringType !== undefined) update.scoringType = scoringType;
+  if (order !== undefined) update.order = order;
+
+  const category = await CategoryModel.findByIdAndUpdate(req.params['id'], update, { new: true });
+  if (!category) { res.status(404).json({ message: 'Category not found' }); return; }
+  res.json({ category });
 });
 
 // ── Matches (admin) ────────────────────────────────────────────────────────────
@@ -144,6 +182,39 @@ router.get('/results/:tournamentId', async (req: Request, res: Response) => {
   const results = await ActualResult.find({ tournament: req.params['tournamentId'] })
     .populate('category', 'name type order');
   res.json({ results });
+});
+
+// ── Groups + card history (admin) ──────────────────────────────────────────────
+
+router.get('/tournament-groups/:tournamentId', async (req: Request, res: Response): Promise<void> => {
+  const { tournamentId } = req.params as { tournamentId: string };
+
+  const groups = await Group.find({ tournament: tournamentId })
+    .populate<{ members: { _id: { toString(): string }; name: string; username: string }[] }>(
+      'members', 'name username'
+    )
+    .lean();
+
+  const groupIds = groups.map((g) => g._id);
+  const allCards = await StrategyCard.find({ tournament: tournamentId, group: { $in: groupIds } }).lean();
+
+  const cardMap = new Map<string, typeof allCards[0]['cards']>();
+  for (const sc of allCards) {
+    cardMap.set(`${sc.user.toString()}_${sc.group.toString()}`, sc.cards);
+  }
+
+  const result = groups.map((group) => ({
+    _id: group._id,
+    name: group.name,
+    members: group.members.map((m) => ({
+      _id: m._id,
+      name: m.name,
+      username: m.username,
+      cards: cardMap.get(`${m._id.toString()}_${group._id.toString()}`) ?? [],
+    })),
+  }));
+
+  res.json({ groups: result });
 });
 
 export default router;

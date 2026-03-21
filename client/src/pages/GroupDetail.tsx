@@ -8,8 +8,86 @@ import {
   useGetTournamentCategoriesQuery,
   useUpdateGroupMutation,
   useLeaveGroupMutation,
+  useGetGroupMemberCardsQuery,
 } from '../store/api';
+import type { AdminCardEntry, AdminMemberSummary } from '../store/api';
 import type { Category, Group } from '../types/index';
+
+// ── Strategy card history ─────────────────────────────────────────────────────
+
+const CardChip = ({ card }: { card: AdminCardEntry }) => {
+  const isSwap = card.type === 'swap';
+  const d = card.details ?? {};
+  const usedColor = isSwap
+    ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+    : 'text-purple-400 bg-purple-400/10 border-purple-400/20';
+
+  let desc = '';
+  if (card.used) {
+    if (isSwap && d.oldSelection && d.newSelection)
+      desc = `${d.oldSelection as string} → ${d.newSelection as string}`;
+    else if (!isSwap && d.player)
+      desc = `${d.player as string} @ #${d.predictedPosition as number}`;
+  }
+  const time = card.usedAt
+    ? new Date(card.usedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  return (
+    <div className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-xs ${card.used ? usedColor : 'text-gray-600 bg-[#1A1A1A] border-[#2A2A2A]'}`}>
+      <span className="font-semibold shrink-0">{isSwap ? 'Swap' : 'Joker'}</span>
+      {card.used ? (
+        <div className="flex flex-col min-w-0">
+          {desc && <span className="truncate">{desc}</span>}
+          {time && <span className="opacity-60 text-[10px]">{time}</span>}
+        </div>
+      ) : (
+        <span>Unused</span>
+      )}
+    </div>
+  );
+};
+
+const MemberCardHistory = ({ member }: { member: AdminMemberSummary }) => {
+  const [open, setOpen] = useState(false);
+  const used = member.cards.filter((c) => c.used).length;
+  const total = member.cards.length;
+
+  return (
+    <div className="border border-[#2A2A2A] rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left cursor-pointer hover:bg-[#1A1A1A] transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-full bg-[#2A2A2A] flex items-center justify-center text-xs font-bold text-gray-400 shrink-0">
+            {member.name[0]?.toUpperCase()}
+          </div>
+          <span className="text-gray-200 text-sm font-medium truncate">{member.name}</span>
+          <span className="text-gray-600 text-xs shrink-0">@{member.username}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {total > 0 && (
+            <span className={`text-xs px-2 py-0.5 rounded-full border ${used > 0 ? 'text-orange-400 bg-orange-400/10 border-orange-400/20' : 'text-gray-600 bg-[#1A1A1A] border-[#2A2A2A]'}`}>
+              {used}/{total} used
+            </span>
+          )}
+          <svg className={`w-4 h-4 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+      {open && (
+        <div className="px-4 pb-3 pt-2 border-t border-[#2A2A2A] grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {total === 0
+            ? <p className="text-gray-600 text-xs col-span-2">No cards allocated yet.</p>
+            : member.cards.map((card, i) => <CardChip key={i} card={card} />)
+          }
+        </div>
+      )}
+    </div>
+  );
+};
 
 const statusConfig = {
   upcoming: { label: 'Upcoming', color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
@@ -258,6 +336,10 @@ export const GroupDetail = () => {
   const { data: allCategories = [] } = useGetTournamentCategoriesQuery(tournamentId!, {
     skip: !tournamentId,
   });
+  const { data: memberCards = [], isLoading: cardsLoading } = useGetGroupMemberCardsQuery(
+    { groupId: id!, tournamentId: tournamentId! },
+    { skip: !id || !tournamentId }
+  );
   const [leaveGroupMutation] = useLeaveGroupMutation();
 
   const handleCopyCode = async () => {
@@ -535,6 +617,22 @@ export const GroupDetail = () => {
             })}
           </div>
         </div>
+
+        {/* Strategy card history — only relevant after tournament starts */}
+        {tournamentId && (
+          <div className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl p-5">
+            <p className="text-gray-400 text-sm font-medium mb-3">Strategy Card History</p>
+            {cardsLoading ? (
+              <div className="flex flex-col gap-2">{[1,2,3].map((n) => <div key={n} className="h-12 bg-[#2A2A2A] rounded-lg animate-pulse" />)}</div>
+            ) : memberCards.length === 0 ? (
+              <p className="text-gray-600 text-sm">No card data yet — cards are allocated when the tournament starts.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {memberCards.map((m) => <MemberCardHistory key={m._id} member={m} />)}
+              </div>
+            )}
+          </div>
+        )}
 
         {actionError && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg px-3 py-2.5">{actionError}</div>

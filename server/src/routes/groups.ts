@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { nanoid } from 'nanoid';
 import { body, validationResult } from 'express-validator';
 import { Group, Tournament, Notification } from '../models/index';
+import StrategyCard from '../models/StrategyCard';
 import { notifyUsers } from '../socket';
 import { protect } from '../middleware/auth';
 import { AuthRequest } from '../types/index';
@@ -262,6 +263,36 @@ router.delete('/:id/leave', async (req: AuthRequest, res: Response): Promise<voi
   group.members = group.members.filter((m) => m.toString() !== req.user!.id);
   await group.save();
   res.json({ message: 'Left group successfully' });
+});
+
+// ── Member cards summary (visible to all group members) ───────────────────────
+
+router.get('/:id/member-cards', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  const { tournamentId } = req.query as { tournamentId?: string };
+  if (!tournamentId) { res.status(400).json({ message: 'tournamentId required' }); return; }
+
+  const group = await Group.findById(id)
+    .populate<{ members: { _id: { toString(): string }; name: string; username: string }[] }>(
+      'members', 'name username'
+    );
+  if (!group) { res.status(404).json({ message: 'Group not found' }); return; }
+
+  const isMember = group.members.some((m) => m._id.toString() === req.user!.id);
+  if (!isMember) { res.status(403).json({ message: 'Not a member of this group' }); return; }
+
+  const allCards = await StrategyCard.find({ tournament: tournamentId, group: id }).lean();
+  const cardMap = new Map<string, typeof allCards[0]['cards']>();
+  for (const sc of allCards) cardMap.set(sc.user.toString(), sc.cards);
+
+  const members = group.members.map((m) => ({
+    _id: m._id,
+    name: m.name,
+    username: m.username,
+    cards: cardMap.get(m._id.toString()) ?? [],
+  }));
+
+  res.json({ members });
 });
 
 export default router;

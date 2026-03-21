@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Layout } from '../components/common/Layout';
-import { useGetGroupQuery, useGetGroupPredictionsQuery } from '../store/api';
+import { useGetGroupQuery, useGetGroupPredictionsQuery, useGetSubmissionStatusQuery } from '../store/api';
 
 const ordinal = (n: number) => {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -34,7 +34,12 @@ export const GroupPredictions = () => {
     { skip: !tournamentId || !isRevealed },
   );
 
-  const loading = groupLoading || (isRevealed && predsLoading);
+  const { data: submissionData, isLoading: statusLoading } = useGetSubmissionStatusQuery(
+    groupId!,
+    { skip: isRevealed },
+  );
+
+  const loading = groupLoading || (isRevealed && predsLoading) || (!isRevealed && statusLoading);
 
   if (loading) {
     return (
@@ -88,16 +93,50 @@ export const GroupPredictions = () => {
           </p>
         </div>
 
-        {/* Locked state */}
+        {/* Locked state — show submission status */}
         {!isRevealed && (
-          <div className="bg-[#1E1E1E] border border-[#2F2F2F] border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center gap-3">
-            <svg className="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            <p className="text-gray-300 font-semibold">Predictions are sealed</p>
-            <p className="text-gray-500 text-sm max-w-xs">
-              Everyone's picks will be revealed once the tournament goes live. No peeking!
-            </p>
+          <div className="flex flex-col gap-4">
+            <div className="bg-[#1E1E1E] border border-[#2F2F2F] border-dashed rounded-xl px-5 py-4 flex items-center gap-3">
+              <svg className="w-5 h-5 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <div>
+                <p className="text-gray-300 font-semibold text-sm">Predictions are sealed</p>
+                <p className="text-gray-500 text-xs mt-0.5">Everyone's picks will be revealed once the tournament goes live.</p>
+              </div>
+              {submissionData && (
+                <span className="ml-auto text-xs text-gray-400 shrink-0">
+                  <span className="text-white font-semibold">{submissionData.submitted}</span>/{submissionData.totalMembers} submitted
+                </span>
+              )}
+            </div>
+
+            {/* Per-member submission status */}
+            {submissionData && submissionData.status.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Submission Status</p>
+                {submissionData.status.map((member) => (
+                  <div key={member.userId} className="flex items-center gap-3 bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl px-4 py-3">
+                    <div className="w-8 h-8 rounded-full bg-[#2A2A2A] flex items-center justify-center text-sm font-bold text-gray-400 shrink-0">
+                      {member.name?.[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-200 text-sm font-medium truncate">{member.name}</p>
+                      <p className="text-gray-600 text-xs">@{member.username}</p>
+                    </div>
+                    {member.submitted ? (
+                      <span className="text-xs font-medium text-green-400 bg-green-400/10 border border-green-400/20 px-2 py-0.5 rounded-full shrink-0">
+                        Submitted
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-full shrink-0">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

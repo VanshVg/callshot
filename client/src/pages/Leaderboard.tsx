@@ -1,8 +1,91 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Layout } from '../components/common/Layout';
 import { useGetGroupQuery, useGetLeaderboardQuery } from '../store/api';
+import { useAuth } from '../context/AuthContext';
 import type { LeaderboardEntry } from '../types/index';
+
+// ── Confetti ───────────────────────────────────────────────────────────────────
+
+const COLORS = ['#FF6800','#FFD700','#FF4500','#00E5FF','#FF69B4','#ADFF2F','#FF1493','#FFA500','#7FFF00','#00BFFF'];
+const PIECES = 90;
+
+interface Piece {
+  id: number; color: string; left: number; delay: number; duration: number; size: number; wobble: number;
+}
+
+const makeConfetti = (): Piece[] =>
+  Array.from({ length: PIECES }, (_, i) => ({
+    id: i,
+    color: COLORS[i % COLORS.length],
+    left: Math.random() * 100,
+    delay: Math.random() * 2.5,
+    duration: 2.8 + Math.random() * 2.2,
+    size: 6 + Math.random() * 8,
+    wobble: (Math.random() - 0.5) * 160,
+  }));
+
+const Confetti = ({ onDone }: { onDone: () => void }) => {
+  const pieces = useRef(makeConfetti()).current;
+
+  // Remove overlay after longest piece settles (~6s)
+  useEffect(() => {
+    const t = setTimeout(onDone, 6200);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+      {pieces.map((p) => (
+        <div
+          key={p.id}
+          className="absolute top-0 rounded-sm"
+          style={{
+            left: `${p.left}%`,
+            width: p.size,
+            height: p.size * (0.4 + Math.random() * 0.6),
+            backgroundColor: p.color,
+            animation: `confetti-fall ${p.duration}s ${p.delay}s ease-in forwards`,
+            transform: `rotate(${Math.random() * 360}deg)`,
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes confetti-fall {
+          0%   { transform: translateY(-20px) rotate(0deg) translateX(0); opacity: 1; }
+          80%  { opacity: 1; }
+          100% { transform: translateY(105vh) rotate(720deg) translateX(var(--wobble, 60px)); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+const WinnerBanner = ({ name, onClose }: { name: string; onClose: () => void }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+    <div
+      className="pointer-events-auto relative bg-gradient-to-br from-yellow-500/20 via-[#1E1E1E] to-[#FF6800]/20 border border-yellow-400/40 rounded-3xl px-8 py-10 w-full max-w-sm text-center shadow-2xl"
+      style={{ animation: 'banner-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}
+    >
+      <div className="text-6xl mb-3">🏆</div>
+      <p className="text-yellow-300 text-xs font-bold uppercase tracking-widest mb-1">Tournament Winner</p>
+      <h2 className="text-white text-3xl font-extrabold mb-1">{name}</h2>
+      <p className="text-gray-400 text-sm mb-6">You called it! Congratulations on winning the tournament.</p>
+      <button
+        onClick={onClose}
+        className="bg-[#FF6800] hover:bg-[#e05e00] text-white text-sm font-bold px-6 py-2.5 rounded-xl transition-colors cursor-pointer"
+      >
+        See the Leaderboard 🎉
+      </button>
+      <style>{`
+        @keyframes banner-pop {
+          from { transform: scale(0.7); opacity: 0; }
+          to   { transform: scale(1);   opacity: 1; }
+        }
+      `}</style>
+    </div>
+  </div>
+);
 
 // ── Rank config ───────────────────────────────────────────────────────────────
 
@@ -126,6 +209,64 @@ const Podium = ({ standings }: { standings: LeaderboardEntry[] }) => {
   );
 };
 
+// ── Details chips parser ──────────────────────────────────────────────────────
+
+interface DetailChip { label: string; pts: string; isJoker?: boolean; isCorrect?: boolean }
+
+const parseDetails = (raw: string): DetailChip[] => {
+  const chips: DetailChip[] = [];
+
+  // Match player picks: "Name → P1 (+10pts)"
+  const pickRe = /(.+?) → P(\d+) \(\+(\d+)pts\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = pickRe.exec(raw)) !== null) {
+    chips.push({ label: `${m[1]} · P${m[2]}`, pts: `+${m[3]}`, isCorrect: true });
+  }
+
+  // Joker bonus
+  const jokerM = raw.match(/Joker CORRECT \(\+(\d+)pts\)/);
+  if (jokerM) chips.push({ label: 'Joker Correct', pts: `+${jokerM[1]}`, isJoker: true, isCorrect: true });
+
+  // Correct single player pick (exact_match categories)
+  if (chips.length === 0 && raw.includes('Correct Player')) {
+    chips.push({ label: raw, pts: '', isCorrect: true });
+  }
+
+  // Unused cards line — just show as plain text
+  if (chips.length === 0 && raw) {
+    chips.push({ label: raw, pts: '' });
+  }
+
+  return chips;
+};
+
+const DetailChips = ({ details }: { details: string }) => {
+  const chips = parseDetails(details);
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1.5">
+      {chips.map((c, i) => (
+        <span
+          key={i}
+          className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+            c.isJoker
+              ? 'text-purple-300 bg-purple-400/10 border-purple-400/20'
+              : c.isCorrect
+              ? 'text-gray-300 bg-[#1E1E1E] border-[#333]'
+              : 'text-gray-500 bg-[#1A1A1A] border-[#2A2A2A]'
+          }`}
+        >
+          {c.label}
+          {c.pts && (
+            <span className={`font-bold ${c.isJoker ? 'text-purple-300' : 'text-green-400'}`}>
+              {c.pts}
+            </span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+};
+
 // ── Entry row ─────────────────────────────────────────────────────────────────
 
 const EntryRow = ({ entry, maxPts }: { entry: LeaderboardEntry; maxPts: number }) => {
@@ -232,7 +373,7 @@ const EntryRow = ({ entry, maxPts }: { entry: LeaderboardEntry; maxPts: number }
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="min-w-0">
                       <p className="text-gray-300 text-xs font-semibold">{b.categoryName}</p>
-                      {b.details && <p className="text-gray-600 text-[11px] mt-0.5 leading-relaxed">{b.details}</p>}
+                      {b.details && <DetailChips details={b.details} />}
                     </div>
                     <span className={`text-xs font-bold shrink-0 px-2 py-0.5 rounded-full border ${
                       b.points > 0 ? 'text-green-400 bg-green-400/10 border-green-400/20' : 'text-gray-600 bg-[#222] border-[#2A2A2A]'
@@ -274,6 +415,7 @@ const EntryRow = ({ entry, maxPts }: { entry: LeaderboardEntry; maxPts: number }
 
 export const Leaderboard = () => {
   const { groupId } = useParams<{ groupId: string }>();
+  const { user } = useAuth();
 
   const { data: group, isLoading: groupLoading } = useGetGroupQuery(groupId!);
 
@@ -292,6 +434,30 @@ export const Leaderboard = () => {
   const tournament = typeof group?.tournament === 'object' ? group.tournament : null;
   const maxPts = standings[0]?.totalPoints ?? 0;
   const showPodium = standings.length >= 3 && standings[2]?.totalPoints > 0;
+
+  // Celebration state
+  const celebrationKey = `winner_seen_${groupId}_${tournamentId}`;
+  const isCompleted = (tournament as any)?.status === 'completed';
+  const winner = standings[0];
+  const isWinner = !!winner && (winner.user.id === user?.id || winner.user.id === (user as any)?._id);
+  const [showBanner, setShowBanner] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const celebrationTriggered = useRef(false);
+
+  useEffect(() => {
+    if (
+      !loading &&
+      isCompleted &&
+      isWinner &&
+      !localStorage.getItem(celebrationKey) &&
+      !celebrationTriggered.current
+    ) {
+      celebrationTriggered.current = true;
+      localStorage.setItem(celebrationKey, '1');
+      setShowConfetti(true);
+      setShowBanner(true);
+    }
+  }, [loading, isCompleted, isWinner, celebrationKey]);
 
   if (loading) {
     return (
@@ -318,6 +484,9 @@ export const Leaderboard = () => {
   }
 
   return (
+    <>
+      {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
+      {showBanner && <WinnerBanner name={winner?.user.name ?? 'You'} onClose={() => setShowBanner(false)} />}
     <Layout>
       <div className="flex flex-col gap-5">
 
@@ -393,5 +562,6 @@ export const Leaderboard = () => {
 
       </div>
     </Layout>
+    </>
   );
 };

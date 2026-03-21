@@ -1,6 +1,24 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { Category, Group, Tournament, Prediction, GroupPrediction, Notification, Match, MatchPrediction, MatchPicks, LeaderboardEntry, ActualResult, StrategyCards, Sport } from '../types/index';
 
+export interface AdminCardEntry {
+  type: 'swap' | 'joker';
+  used: boolean;
+  usedAt: string | null;
+  details: Record<string, unknown> | null;
+}
+export interface AdminMemberSummary {
+  _id: string;
+  name: string;
+  username: string;
+  cards: AdminCardEntry[];
+}
+export interface AdminGroupSummary {
+  _id: string;
+  name: string;
+  members: AdminMemberSummary[];
+}
+
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
@@ -11,7 +29,7 @@ export const api = createApi({
       return headers;
     },
   }),
-  tagTypes: ['MyGroups', 'Group', 'PublicGroups', 'Notification', 'Prediction', 'Cards', 'Match', 'MatchPrediction', 'Leaderboard', 'ActualResult', 'AdminTournament'],
+  tagTypes: ['MyGroups', 'Group', 'PublicGroups', 'Notification', 'Prediction', 'Cards', 'Match', 'MatchPrediction', 'Leaderboard', 'ActualResult', 'AdminTournament', 'AdminCategory'],
   endpoints: (builder) => ({
 
     // ── Groups ────────────────────────────────────────────────────────────────
@@ -26,6 +44,11 @@ export const api = createApi({
       query: (id) => `/groups/${id}`,
       transformResponse: (res: { group: Group }) => res.group,
       providesTags: (_res, _err, id) => [{ type: 'Group', id }],
+    }),
+
+    getGroupMemberCards: builder.query<AdminMemberSummary[], { groupId: string; tournamentId: string }>({
+      query: ({ groupId, tournamentId }) => `/groups/${groupId}/member-cards?tournamentId=${tournamentId}`,
+      transformResponse: (res: { members: AdminMemberSummary[] }) => res.members,
     }),
 
     getPublicGroups: builder.query<Group[], void>({
@@ -110,6 +133,15 @@ export const api = createApi({
     getGroupPredictions: builder.query<GroupPrediction[], { groupId: string; tournamentId: string }>({
       query: ({ groupId, tournamentId }) => `/predictions/${groupId}/${tournamentId}/all`,
       transformResponse: (res: { predictions: GroupPrediction[] }) => res.predictions,
+    }),
+
+    getSubmissionStatus: builder.query<{
+      status: { userId: string; name: string; username: string; submitted: boolean }[];
+      totalMembers: number;
+      submitted: number;
+    }, string>({
+      query: (groupId) => `/predictions/${groupId}/submission-status`,
+      providesTags: (_res, _err, groupId) => [{ type: 'Prediction', id: `status-${groupId}` }],
     }),
 
     submitPrediction: builder.mutation<Prediction, {
@@ -261,6 +293,22 @@ export const api = createApi({
 
     // ── Admin ─────────────────────────────────────────────────────────────────
 
+    getAdminCategories: builder.query<Category[], string>({
+      query: (sport) => `/admin/categories?sport=${sport}`,
+      transformResponse: (res: { categories: Category[] }) => res.categories,
+      providesTags: ['AdminCategory'],
+    }),
+
+    updateAdminCategory: builder.mutation<Category, { id: string; body: {
+      name?: string; description?: string;
+      type?: 'player_stat' | 'team_position' | 'single_player';
+      selectionCount?: number; scoringType?: 'positional' | 'exact_match'; order?: number;
+    } }>({
+      query: ({ id, body }) => ({ url: `/admin/categories/${id}`, method: 'PUT', body }),
+      transformResponse: (res: { category: Category }) => res.category,
+      invalidatesTags: ['AdminCategory'],
+    }),
+
     getAdminTournaments: builder.query<Tournament[], void>({
       query: () => '/admin/tournaments',
       transformResponse: (res: { tournaments: Tournament[] }) => res.tournaments,
@@ -282,6 +330,11 @@ export const api = createApi({
     } }>({
       query: ({ id, body }) => ({ url: `/admin/tournaments/${id}`, method: 'PUT', body }),
       transformResponse: (res: { tournament: Tournament }) => res.tournament,
+      invalidatesTags: ['AdminTournament'],
+    }),
+
+    deleteAdminTournament: builder.mutation<void, string>({
+      query: (id) => ({ url: `/admin/tournaments/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminTournament'],
     }),
 
@@ -349,6 +402,7 @@ export const {
   useGetTournamentOptionsQuery,
   useGetMyPredictionQuery,
   useGetGroupPredictionsQuery,
+  useGetSubmissionStatusQuery,
   useSubmitPredictionMutation,
   useGetNotificationsQuery,
   useMarkNotificationsReadMutation,
@@ -359,12 +413,16 @@ export const {
   useSubmitMatchPredictionMutation,
   useGetMatchPredictionsQuery,
   useGetLeaderboardQuery,
+  useGetGroupMemberCardsQuery,
+  useGetAdminCategoriesQuery,
+  useUpdateAdminCategoryMutation,
   useGetAdminTournamentsQuery,
   useGetAdminResultsQuery,
   useSetTournamentStatusMutation,
   useSetActualResultMutation,
   useCreateAdminTournamentMutation,
   useUpdateAdminTournamentMutation,
+  useDeleteAdminTournamentMutation,
   useUpdateTournamentSquadsMutation,
   useCreateAdminMatchMutation,
   useBulkCreateMatchesMutation,
