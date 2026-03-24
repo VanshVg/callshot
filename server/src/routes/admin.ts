@@ -37,9 +37,9 @@ router.post('/tournaments', async (req: Request, res: Response): Promise<void> =
 });
 
 router.put('/tournaments/:id', async (req: Request, res: Response): Promise<void> => {
-  const { name, sport, type, season, totalMatches, startDate, endDate } = req.body as {
+  const { name, sport, type, season, totalMatches, startDate, endDate, cardsEnabled } = req.body as {
     name?: string; sport?: string; type?: string; season?: string;
-    totalMatches?: number; startDate?: string; endDate?: string;
+    totalMatches?: number; startDate?: string; endDate?: string; cardsEnabled?: boolean;
   };
   const update: Record<string, unknown> = {};
   if (name !== undefined) update.name = name;
@@ -49,6 +49,7 @@ router.put('/tournaments/:id', async (req: Request, res: Response): Promise<void
   if (totalMatches !== undefined) update.totalMatches = totalMatches;
   if (startDate !== undefined) update.startDate = new Date(startDate);
   if (endDate !== undefined) update.endDate = new Date(endDate);
+  if (cardsEnabled !== undefined) update.cardsEnabled = cardsEnabled;
 
   const tournament = await Tournament.findByIdAndUpdate(req.params['id'], update, { new: true });
   if (!tournament) { res.status(404).json({ message: 'Tournament not found' }); return; }

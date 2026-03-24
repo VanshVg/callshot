@@ -32,6 +32,10 @@ const validateCardUse = async (req: AuthRequest, res: Response): Promise<{
     res.status(400).json({ message: 'Tournament is over — cards can no longer be used' });
     return null;
   }
+  if (!(tournament as any).cardsEnabled) {
+    res.status(403).json({ message: 'Strategy cards have been disabled for this tournament' });
+    return null;
+  }
 
   const strategyCard = await StrategyCard.findOne({ user: req.user!.id, group: groupId, tournament: tournamentId });
   if (!strategyCard) { res.status(404).json({ message: 'Cards not found' }); return null; }

@@ -11,6 +11,7 @@ export interface ITournament extends Document {
   status: 'upcoming' | 'live' | 'completed';
   teams: string[];
   squads: Map<string, string[]>;
+  cardsEnabled: boolean;
   createdAt: Date;
 }
 
@@ -26,6 +27,7 @@ const TournamentSchema = new Schema<ITournament>(
     status: { type: String, enum: ['upcoming', 'live', 'completed'], default: 'upcoming' },
     teams: { type: [String], default: [] },
     squads: { type: Map, of: [String], default: {} },
+    cardsEnabled: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

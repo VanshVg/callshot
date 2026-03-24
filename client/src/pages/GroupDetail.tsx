@@ -9,6 +9,7 @@ import {
   useUpdateGroupMutation,
   useLeaveGroupMutation,
   useGetGroupMemberCardsQuery,
+  useAddGroupMemberMutation,
 } from '../store/api';
 import type { AdminCardEntry, AdminMemberSummary } from '../store/api';
 import type { Category, Group } from '../types/index';
@@ -324,11 +325,15 @@ export const GroupDetail = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [addUsername, setAddUsername] = useState('');
+  const [addError, setAddError] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
+  const [addGroupMember] = useAddGroupMemberMutation();
 
   const { data: group, isLoading, isError } = useGetGroupQuery(id!, { skip: !id });
   const tournamentId =
@@ -342,13 +347,12 @@ export const GroupDetail = () => {
   );
   const [leaveGroupMutation] = useLeaveGroupMutation();
 
-  const handleCopyCode = async () => {
-    if (!group) return;
+  const copyToClipboard = async (text: string) => {
     if (navigator.clipboard) {
-      await navigator.clipboard.writeText(group.inviteCode);
+      await navigator.clipboard.writeText(text);
     } else {
       const el = document.createElement('textarea');
-      el.value = group.inviteCode;
+      el.value = text;
       el.style.position = 'fixed';
       el.style.opacity = '0';
       document.body.appendChild(el);
@@ -356,8 +360,34 @@ export const GroupDetail = () => {
       document.execCommand('copy');
       document.body.removeChild(el);
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyCode = async () => {
+    if (!group) return;
+    await copyToClipboard(group.inviteCode);
+    setCopied('code');
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleCopyLink = async () => {
+    if (!group) return;
+    await copyToClipboard(`${window.location.origin}/join/${group.inviteCode}`);
+    setCopied('link');
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleAddMember = async () => {
+    if (!group || !addUsername.trim()) return;
+    setAddError('');
+    setAddLoading(true);
+    try {
+      await addGroupMember({ id: group._id, username: addUsername.trim() }).unwrap();
+      setAddUsername('');
+    } catch (err: unknown) {
+      setAddError((err as { data?: { message?: string } })?.data?.message || 'Failed to add member');
+    } finally {
+      setAddLoading(false);
+    }
   };
 
   const handleLeave = async () => {
@@ -491,26 +521,53 @@ export const GroupDetail = () => {
           />
         )}
 
-        {/* Invite code (admin only, only while tournament is upcoming) */}
+        {/* Invite section (admin only, only while tournament is upcoming) */}
         {isCreator && tournamentStatus === 'upcoming' && (
-          <div className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl p-5">
-            <p className="text-gray-400 text-sm font-medium mb-3">Invite Code</p>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 bg-[#111111] border border-[#2F2F2F] rounded-lg px-4 py-3">
+          <div className="bg-[#1E1E1E] border border-[#2F2F2F] rounded-xl p-5 flex flex-col gap-4">
+            <p className="text-gray-400 text-sm font-medium">Invite Members</p>
+
+            {/* Invite code + copy buttons */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-[#111111] border border-[#2F2F2F] rounded-lg px-4 py-3 min-w-0">
                 <span className="text-[#FF6800] font-mono text-xl font-bold tracking-[0.2em]">{group.inviteCode}</span>
               </div>
               <button
                 onClick={handleCopyCode}
-                className="bg-[#2A2A2A] hover:bg-[#333] border border-[#3A3A3A] text-gray-300 text-sm px-4 py-3 rounded-lg transition-colors flex items-center gap-2 flex-shrink-0 cursor-pointer"
+                className="bg-[#2A2A2A] hover:bg-[#333] border border-[#3A3A3A] text-gray-300 text-sm px-3 py-3 rounded-lg transition-colors flex items-center gap-1.5 flex-shrink-0 cursor-pointer whitespace-nowrap"
               >
-                {copied ? (
-                  <><svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Copied!</>
+                {copied === 'code' ? (
+                  <><svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="hidden sm:inline">Copied!</span></>
                 ) : (
-                  <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Copy</>
+                  <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg><span className="hidden sm:inline">Code</span></>
+                )}
+              </button>
+              <button
+                onClick={handleCopyLink}
+                className="bg-[#FF6800]/10 hover:bg-[#FF6800]/20 border border-[#FF6800]/20 text-[#FF6800] text-sm px-3 py-3 rounded-lg transition-colors flex items-center gap-1.5 flex-shrink-0 cursor-pointer whitespace-nowrap"
+              >
+                {copied === 'link' ? (
+                  <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="hidden sm:inline">Copied!</span></>
+                ) : (
+                  <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg><span className="hidden sm:inline">Link</span></>
                 )}
               </button>
             </div>
-            <p className="text-gray-600 text-xs mt-2">Share this code with friends to invite them to your group.</p>
+
+            {/* Add by username */}
+            <div className="border-t border-[#2A2A2A] pt-4 flex flex-col gap-2">
+              <p className="text-gray-500 text-xs">Or add directly by username</p>
+              <div className="flex gap-2">
+                <input
+                  value={addUsername}
+                  onChange={(e) => { setAddUsername(e.target.value); setAddError(''); }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddMember()}
+                  placeholder="@username"
+                  className="flex-1 bg-[#111] border border-[#2F2F2F] focus:border-[#FF6800]/50 outline-none rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 transition-colors"
+                />
+                <Button loading={addLoading} onClick={handleAddMember} disabled={!addUsername.trim()}>Add</Button>
+              </div>
+              {addError && <p className="text-red-400 text-xs">{addError}</p>}
+            </div>
           </div>
         )}
 

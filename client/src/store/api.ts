@@ -93,6 +93,12 @@ export const api = createApi({
       invalidatesTags: ['MyGroups'],
     }),
 
+    addGroupMember: builder.mutation<Group, { id: string; username: string }>({
+      query: ({ id, username }) => ({ url: `/groups/${id}/members`, method: 'POST', body: { username } }),
+      transformResponse: (res: { group: Group }) => res.group,
+      invalidatesTags: (_result, _err, arg) => [{ type: 'Group', id: arg.id }],
+    }),
+
     // ── Tournaments ───────────────────────────────────────────────────────────
 
     getTournaments: builder.query<Tournament[], void>({
@@ -326,7 +332,7 @@ export const api = createApi({
 
     updateAdminTournament: builder.mutation<Tournament, { id: string; body: {
       name?: string; sport?: string; type?: string; season?: string;
-      totalMatches?: number; startDate?: string; endDate?: string;
+      totalMatches?: number; startDate?: string; endDate?: string; cardsEnabled?: boolean;
     } }>({
       query: ({ id, body }) => ({ url: `/admin/tournaments/${id}`, method: 'PUT', body }),
       transformResponse: (res: { tournament: Tournament }) => res.tournament,
@@ -397,6 +403,7 @@ export const {
   useJoinGroupMutation,
   useJoinPublicGroupMutation,
   useLeaveGroupMutation,
+  useAddGroupMemberMutation,
   useGetTournamentsQuery,
   useGetTournamentCategoriesQuery,
   useGetTournamentOptionsQuery,

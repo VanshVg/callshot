@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { nanoid } from 'nanoid';
 import { body, validationResult } from 'express-validator';
-import { Group, Tournament, Notification } from '../models/index';
+import { Group, Tournament, Notification, User } from '../models/index';
 import StrategyCard from '../models/StrategyCard';
 import { notifyUsers } from '../socket';
 import { protect } from '../middleware/auth';
@@ -93,6 +93,11 @@ router.post('/join', async (req: AuthRequest, res: Response): Promise<void> => {
 
   if (group.members.length >= group.maxMembers) {
     res.status(400).json({ message: 'This group is full' }); return;
+  }
+
+  const tournament = await Tournament.findById(group.tournament);
+  if (tournament && tournament.status !== 'upcoming') {
+    res.status(400).json({ message: 'Cannot join a group after the tournament has started' }); return;
   }
 
   group.members.push(req.user!.id as any);
@@ -203,6 +208,46 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       });
     }
   }
+
+  const updated = await Group.findById(group._id)
+    .populate('tournament', 'name season status totalMatches startDate endDate')
+    .populate('members', 'name username')
+    .populate('createdBy', 'name username')
+    .populate('enabledCategories', 'name type selectionCount scoringType description order');
+
+  res.json({ group: updated });
+});
+
+// ── add member by username (group creator only) ───────────────────────────────
+
+router.post('/:id/members', async (req: AuthRequest, res: Response): Promise<void> => {
+  const group = await Group.findById(req.params['id']);
+  if (!group) { res.status(404).json({ message: 'Group not found' }); return; }
+
+  if (group.createdBy.toString() !== req.user!.id) {
+    res.status(403).json({ message: 'Only the group admin can add members' }); return;
+  }
+
+  const tournament = await Tournament.findById(group.tournament);
+  if (tournament && tournament.status !== 'upcoming') {
+    res.status(400).json({ message: 'Cannot add members after the tournament has started' }); return;
+  }
+
+  const { username } = req.body as { username: string };
+  if (!username?.trim()) { res.status(400).json({ message: 'Username required' }); return; }
+
+  const userToAdd = await User.findOne({ username: username.trim().toLowerCase() });
+  if (!userToAdd) { res.status(404).json({ message: `No user found with username @${username.trim()}` }); return; }
+
+  const alreadyMember = group.members.some((m) => m.toString() === userToAdd._id.toString());
+  if (alreadyMember) { res.status(409).json({ message: 'User is already a member of this group' }); return; }
+
+  if (group.members.length >= group.maxMembers) {
+    res.status(400).json({ message: 'This group is full' }); return;
+  }
+
+  group.members.push(userToAdd._id as any);
+  await group.save();
 
   const updated = await Group.findById(group._id)
     .populate('tournament', 'name season status totalMatches startDate endDate')

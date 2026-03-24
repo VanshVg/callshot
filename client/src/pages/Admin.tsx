@@ -1090,8 +1090,11 @@ const TournamentDetail = ({
 
   const [tournamentStatusValue, setTournamentStatusValue] = useState<string>(tournament.status);
   const [statusSaved, setStatusSaved] = useState(false);
+  const [cardsEnabled, setCardsEnabled] = useState<boolean>(tournament.cardsEnabled !== false);
+  const [cardsSaved, setCardsSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteAdminTournament, { isLoading: deleting }] = useDeleteAdminTournamentMutation();
+  const [updateAdminTournament] = useUpdateAdminTournamentMutation();
 
   const { data: matches = [], isLoading: matchesLoading } = useGetMatchesQuery(tournament._id, {
     skip: tab !== 'matches' && tab !== 'schedule',
@@ -1113,6 +1116,13 @@ const TournamentDetail = ({
     await setTournamentStatus({ id: tournament._id, status: tournamentStatusValue });
     setStatusSaved(true);
     setTimeout(() => setStatusSaved(false), 2000);
+  };
+
+  const handleCardsToggle = async (enabled: boolean) => {
+    setCardsEnabled(enabled);
+    await updateAdminTournament({ id: tournament._id, body: { cardsEnabled: enabled } });
+    setCardsSaved(true);
+    setTimeout(() => setCardsSaved(false), 2000);
   };
 
   const handleDelete = async () => {
@@ -1219,6 +1229,24 @@ const TournamentDetail = ({
             </div>
           </div>
         )}
+
+        {/* Cards enabled toggle */}
+        <div className="flex items-center justify-between px-4 py-3 bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl">
+          <div>
+            <p className="text-gray-300 text-sm font-medium">Strategy Cards</p>
+            <p className="text-gray-600 text-xs mt-0.5">Allow members to use swap and joker cards</p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {cardsSaved && <span className="text-green-400 text-xs">Saved!</span>}
+            <button
+              type="button"
+              onClick={() => handleCardsToggle(!cardsEnabled)}
+              className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer flex-shrink-0 ${cardsEnabled ? 'bg-[#FF6800]' : 'bg-[#2A2A2A]'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${cardsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-1 bg-[#1A1A1A] border border-[#2F2F2F] rounded-xl p-1 overflow-x-auto">

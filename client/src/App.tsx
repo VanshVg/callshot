@@ -15,6 +15,7 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Cards } from './pages/Cards';
 import { Admin, AdminTournamentDetail } from './pages/Admin';
 import { Rules } from './pages/Rules';
+import { Join } from './pages/Join';
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
@@ -51,6 +52,7 @@ const AppRoutes = () => {
       <Route path="/admin/tournaments/:tournamentId" element={<AdminRoute><AdminTournamentDetail /></AdminRoute>} />
       <Route path="/admin/tournaments/:tournamentId/:tab" element={<AdminRoute><AdminTournamentDetail /></AdminRoute>} />
       <Route path="/rules" element={<Rules />} />
+      <Route path="/join/:inviteCode" element={<Join />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

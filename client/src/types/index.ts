@@ -19,6 +19,7 @@ export interface Tournament {
   status: 'upcoming' | 'live' | 'completed';
   teams?: string[];
   squads?: Record<string, string[]>;
+  cardsEnabled?: boolean;
 }
 
 export type Sport = 'cricket';
