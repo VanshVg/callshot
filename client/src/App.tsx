@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import type { ReactNode } from 'react';
+import { PageLoader } from './components/common/PageLoader';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -19,19 +20,19 @@ import { Join } from './pages/Join';
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <PageLoader />;
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 const AdminRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <PageLoader />;
   return user?.role === 'admin' ? <>{children}</> : <Navigate to="/dashboard" replace />;
 };
 
 const AppRoutes = () => {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <PageLoader />;
 
   return (
     <Routes>
