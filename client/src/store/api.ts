@@ -1,5 +1,54 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import type { Category, Group, Tournament, Prediction, GroupPrediction, Notification, Match, MatchPrediction, MatchPicks, LeaderboardEntry, ActualResult, StrategyCards, Sport } from '../types/index';
+
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: import.meta.env.VITE_API_URL || '/api',
+  prepareHeaders: (headers) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return headers;
+  },
+});
+
+// Prevent concurrent refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+const refreshAccessToken = async (): Promise<string | null> => {
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL || '/api'}/auth/refresh-token`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) }
+    );
+    if (!res.ok) throw new Error('Refresh failed');
+    const data = await res.json() as { accessToken: string };
+    localStorage.setItem('accessToken', data.accessToken);
+    return data.accessToken;
+  } catch {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    window.location.href = '/login';
+    return null;
+  }
+};
+
+const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, api, extraOptions) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  if (result.error?.status === 401) {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      refreshPromise = refreshAccessToken().finally(() => { isRefreshing = false; refreshPromise = null; });
+    }
+    const newToken = await refreshPromise;
+    if (newToken) result = await rawBaseQuery(args, api, extraOptions);
+  }
+
+  return result;
+};
 
 export interface AdminCardEntry {
   type: 'swap' | 'joker';
@@ -21,14 +70,7 @@ export interface AdminGroupSummary {
 
 export const api = createApi({
   reducerPath: 'api',
-  baseQuery: fetchBaseQuery({
-    baseUrl: import.meta.env.VITE_API_URL || '/api',
-    prepareHeaders: (headers) => {
-      const token = localStorage.getItem('accessToken');
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithReauth,
   tagTypes: ['MyGroups', 'Group', 'PublicGroups', 'Notification', 'Prediction', 'Cards', 'Match', 'MatchPrediction', 'Leaderboard', 'ActualResult', 'AdminTournament', 'AdminCategory'],
   endpoints: (builder) => ({
 
