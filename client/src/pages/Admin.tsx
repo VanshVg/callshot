@@ -922,8 +922,10 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
   tournamentId: string; options: string[];
 }) => {
   const [open, setOpen] = useState(false);
-  // exact_match categories (e.g. Player of the Tournament): admin enters 1 actual result
-  const maxSlots = category.scoringType === 'exact_match' ? 1 : (category.selectionCount ?? 3);
+  // exact_match = 1 slot (Player of Tournament)
+  // team_position = 4 slots (Top 4 Teams)
+  // positional player stats = 5 slots (P1–P5, scoring goes up to position 5)
+  const maxSlots = category.scoringType === 'exact_match' ? 1 : category.type === 'team_position' ? 4 : 5;
 
   const [groups, setGroups] = useState<string[][]>(() => buildInitGroups(result, maxSlots));
   const [saved, setSaved] = useState(false);
