@@ -157,7 +157,7 @@ router.post(
   [
     body('tournamentId').notEmpty(),
     body('categoryId').notEmpty(),
-    body('rankings').isArray({ min: 1, max: 5 }),
+    body('rankings').isArray({ min: 1, max: 20 }),
   ],
   async (req: AuthRequest, res: Response): Promise<void> => {
     const errors = validationResult(req);
