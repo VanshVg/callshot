@@ -932,6 +932,10 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
   const [error, setError] = useState('');
   const [setActualResult, { isLoading }] = useSetActualResultMutation();
 
+  // Drag-and-drop state
+  const [dragSource, setDragSource] = useState<{ gi: number; ni: number } | null>(null);
+  const [dropTarget, setDropTarget] = useState<number | null>(null);
+
   // Sync when result loads asynchronously after mount (e.g. on page reload)
   useEffect(() => {
     setGroups(buildInitGroups(result, maxSlots));
@@ -960,6 +964,51 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
 
   const addTie = (gi: number) => {
     setGroups((prev) => prev.map((g, i) => i === gi ? [...g, ''] : g));
+  };
+
+  // ── Drag-and-drop handlers ──────────────────────────────────────────────────
+  const handleDragStart = (gi: number, ni: number) => {
+    setDragSource({ gi, ni });
+  };
+
+  const handleDragOver = (e: React.DragEvent, gi: number) => {
+    e.preventDefault();
+    setDropTarget(gi);
+  };
+
+  const handleDragLeave = () => {
+    setDropTarget(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetGi: number) => {
+    e.preventDefault();
+    setDropTarget(null);
+    if (!dragSource) return;
+    const { gi: srcGi, ni: srcNi } = dragSource;
+    if (srcGi === targetGi) { setDragSource(null); return; }
+
+    const playerName = groups[srcGi][srcNi];
+    if (!playerName) { setDragSource(null); return; }
+
+    setGroups((prev) => {
+      const next = prev.map((g) => [...g]);
+      // Remove from source group
+      next[srcGi] = next[srcGi].filter((_, j) => j !== srcNi);
+      if (next[srcGi].length === 0) next[srcGi] = [''];
+      // Add to target group
+      if (next[targetGi].length === 1 && next[targetGi][0] === '') {
+        next[targetGi][0] = playerName;
+      } else {
+        next[targetGi].push(playerName);
+      }
+      return next;
+    });
+    setDragSource(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragSource(null);
+    setDropTarget(null);
   };
 
   const handleSave = async () => {
@@ -1000,8 +1049,15 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
         <div className="px-5 pb-5 border-t border-[#2F2F2F] pt-4 flex flex-col gap-4">
           {groups.map((group, gi) => {
             const pos = getPosition(gi);
+            const isOver = dropTarget === gi && dragSource?.gi !== gi;
             return (
-              <div key={gi} className="flex flex-col gap-2">
+              <div
+                key={gi}
+                className={`flex flex-col gap-2 rounded-lg p-2 -m-2 transition-colors ${isOver ? 'bg-[#FF6800]/10 ring-1 ring-[#FF6800]/30' : ''}`}
+                onDragOver={(e) => handleDragOver(e, gi)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, gi)}
+              >
                 {/* Rank label + tie indicator */}
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500 text-xs font-mono w-6 text-right shrink-0">#{pos}</span>
@@ -1015,8 +1071,24 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
                 {/* Name slots for this rank */}
                 {group.map((name, ni) => {
                   const slotOptions = options.filter((o) => !allNames.includes(o) || o === name);
+                  const isDragging = dragSource?.gi === gi && dragSource?.ni === ni;
                   return (
-                    <div key={ni} className="flex items-center gap-2 ml-8">
+                    <div
+                      key={ni}
+                      className={`flex items-center gap-2 ml-8 transition-opacity ${isDragging ? 'opacity-40' : ''}`}
+                      draggable={!!name}
+                      onDragStart={() => handleDragStart(gi, ni)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      {/* Drag handle */}
+                      {name && (
+                        <div className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 shrink-0" title="Drag to move to another rank">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                          </svg>
+                        </div>
+                      )}
+                      {!name && <div className="w-4 shrink-0" />}
                       <div className="flex-1">
                         <SearchDropdown
                           options={slotOptions}
@@ -1025,11 +1097,24 @@ const CategoryRow = ({ category, result, tournamentId, options }: {
                           placeholder={`Rank ${pos}${group.length > 1 ? ` (tied ${ni + 1})` : ''} — search name…`}
                         />
                       </div>
+                      {/* Clear name from slot */}
+                      {name && (
+                        <button
+                          onClick={() => setName(gi, ni, '')}
+                          className="text-gray-600 hover:text-gray-400 cursor-pointer transition-colors shrink-0"
+                          title="Clear"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
                       {/* Remove tied entry (only if >1 in group) */}
                       {group.length > 1 && (
                         <button
                           onClick={() => removeName(gi, ni)}
                           className="text-gray-600 hover:text-red-400 cursor-pointer transition-colors shrink-0"
+                          title="Remove slot"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
