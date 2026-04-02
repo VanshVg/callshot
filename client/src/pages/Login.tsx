@@ -88,6 +88,12 @@ export const Login = () => {
               autoComplete="current-password"
             />
 
+            <div className="text-right -mt-2">
+              <Link to="/forgot-password" className="text-[#FF6800] hover:text-[#ff8533] no-underline text-sm font-medium">
+                Forgot password?
+              </Link>
+            </div>
+
             <Button type="submit" fullWidth loading={loading} className="mt-2">
               Login
             </Button>

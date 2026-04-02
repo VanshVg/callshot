@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { validationResult } from 'express-validator';
 import { User } from '../models/index';
 import { AuthRequest, JwtPayload } from '../types/index';
-import { generateOtp, sendOtpEmail } from '../services/email';
+import { generateOtp, sendOtpEmail, sendPasswordResetOtpEmail } from '../services/email';
 
 const OTP_EXPIRY_MINUTES = 15;
 
@@ -29,7 +29,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   const otp = generateOtp();
   const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-  await User.create({ name, username, email, password, otp, otpExpiry, isVerified: false });
+  await User.create({ name, username, email, password, otp, otpExpiry, otpPurpose: 'verification', isVerified: false });
   await sendOtpEmail(email, name, otp);
 
   res.status(201).json({
@@ -51,7 +51,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
     return;
   }
 
-  if (!user.otp || !user.otpExpiry) {
+  if (!user.otp || !user.otpExpiry || user.otpPurpose !== 'verification') {
     res.status(400).json({ message: 'No OTP found. Please request a new one.' });
     return;
   }
@@ -69,6 +69,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
   user.isVerified = true;
   user.otp = null;
   user.otpExpiry = null;
+  user.otpPurpose = null;
   await user.save();
 
   const accessToken = signAccess(user.id as string, user.role);
@@ -92,6 +93,7 @@ export const resendOtp = async (req: Request, res: Response): Promise<void> => {
   const otp = generateOtp();
   user.otp = otp;
   user.otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+  user.otpPurpose = 'verification';
   await user.save();
 
   await sendOtpEmail(email, user.name, otp);
@@ -114,6 +116,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const otp = generateOtp();
     user.otp = otp;
     user.otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+    user.otpPurpose = 'verification';
     await user.save();
     await sendOtpEmail(email, user.name, otp);
     res.status(403).json({
@@ -148,7 +151,98 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
 };
 
 export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
-  const user = await User.findById(req.user!.id).select('-password -otp -otpExpiry');
+  const user = await User.findById(req.user!.id).select('-password -otp -otpExpiry -otpPurpose');
   if (!user) { res.status(404).json({ message: 'User not found' }); return; }
   res.json({ user });
+};
+
+const signResetToken = (id: string) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jwt.sign({ id, purpose: 'password-reset' }, process.env.JWT_SECRET!, { expiresIn: '10m' as any });
+
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+
+  const { email } = req.body as { email: string };
+  const user = await User.findOne({ email: email.toLowerCase() });
+
+  if (!user) {
+    res.json({ message: 'If an account exists with this email, a reset code has been sent', email });
+    return;
+  }
+
+  if (!user.isVerified) {
+    res.status(400).json({ message: 'Please verify your email first' });
+    return;
+  }
+
+  const otp = generateOtp();
+  user.otp = otp;
+  user.otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+  user.otpPurpose = 'password-reset';
+  await user.save();
+
+  await sendPasswordResetOtpEmail(email, user.name, otp);
+  res.json({ message: 'If an account exists with this email, a reset code has been sent', email });
+};
+
+export const verifyResetOtp = async (req: Request, res: Response): Promise<void> => {
+  const { email, otp } = req.body as { email: string; otp: string };
+  if (!email || !otp) { res.status(400).json({ message: 'Email and OTP are required' }); return; }
+
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) { res.status(404).json({ message: 'Account not found' }); return; }
+
+  if (user.otpPurpose !== 'password-reset') {
+    res.status(400).json({ message: 'No password reset requested' });
+    return;
+  }
+
+  if (!user.otp || !user.otpExpiry) {
+    res.status(400).json({ message: 'No OTP found. Please request a new one.' });
+    return;
+  }
+
+  if (new Date() > user.otpExpiry) {
+    res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+    return;
+  }
+
+  if (user.otp !== otp) {
+    res.status(400).json({ message: 'Incorrect OTP. Please try again.' });
+    return;
+  }
+
+  const resetToken = signResetToken(user.id as string);
+  res.json({ resetToken, message: 'OTP verified successfully' });
+};
+
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+
+  const { resetToken, password } = req.body as { resetToken: string; password: string };
+  if (!resetToken) { res.status(400).json({ message: 'Reset token is required' }); return; }
+
+  try {
+    const decoded = jwt.verify(resetToken, process.env.JWT_SECRET!) as { id: string; purpose: string };
+    if (decoded.purpose !== 'password-reset') {
+      res.status(400).json({ message: 'Invalid reset token' });
+      return;
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user) { res.status(404).json({ message: 'User not found' }); return; }
+
+    user.password = password;
+    user.otp = null;
+    user.otpExpiry = null;
+    user.otpPurpose = null;
+    await user.save();
+
+    res.json({ message: 'Password reset successful. Please login with your new password.' });
+  } catch {
+    res.status(401).json({ message: 'Reset token has expired. Please start again.' });
+  }
 };

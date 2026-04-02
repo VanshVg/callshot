@@ -10,6 +10,7 @@ export interface IUser extends Document {
   isVerified: boolean;
   otp: string | null;
   otpExpiry: Date | null;
+  otpPurpose: 'verification' | 'password-reset' | null;
   createdAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
 }
@@ -24,6 +25,7 @@ const UserSchema = new Schema<IUser>(
     isVerified: { type: Boolean, default: false },
     otp: { type: String, default: null },
     otpExpiry: { type: Date, default: null },
+    otpPurpose: { type: String, enum: ['verification', 'password-reset', null], default: null },
   },
   { timestamps: true }
 );
