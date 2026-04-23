@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { StrategyCard, Prediction, Tournament, Group } from '../models/index';
+import { StrategyCard, Prediction, Tournament, Group, Category } from '../models/index';
 import Notification from '../models/Notification';
 import { protect } from '../middleware/auth';
 import { AuthRequest } from '../types/index';
@@ -137,6 +137,15 @@ router.post('/joker', async (req: AuthRequest, res: Response): Promise<void> => 
     groupId: string; tournamentId: string;
     categoryId: string; player: string; predictedPosition: number;
   };
+
+  const category = await Category.findById(categoryId);
+  if (!category) { res.status(404).json({ message: 'Category not found' }); return; }
+
+  const maxPosition = category.type === 'team_position' ? 4 : 5;
+  if (!predictedPosition || predictedPosition < 1 || predictedPosition > maxPosition) {
+    res.status(400).json({ message: `Predicted position must be between 1 and ${maxPosition} for this category` });
+    return;
+  }
 
   availableCard.type = 'joker';
   availableCard.used = true;

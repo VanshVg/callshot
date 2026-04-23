@@ -89,7 +89,6 @@ const SwapForm = ({
   groupId: string; tournamentId: string;
   onDone: () => void; onCancel: () => void;
 }) => {
-  const [swapMode, setSwapMode] = useState<'replace' | 'reorder'>('replace');
   const [categoryId, setCategoryId] = useState('');
   const [oldSelection, setOldSelection] = useState('');
   const [newSelection, setNewSelection] = useState('');
@@ -101,13 +100,9 @@ const SwapForm = ({
   const currentPicks = selectedCat?.selections ?? [];
   const playerPool = isTeam ? options.teams : options.players;
 
-  // Replace mode: exclude current picks (except the one being swapped out)
   const replaceOptions = playerPool.filter(
     (p) => !currentPicks.includes(p) || p === oldSelection,
   ).filter((p) => p !== oldSelection);
-
-  // Reorder mode: second pick must be different from first
-  const reorderSecondOptions = currentPicks.filter((p) => p !== oldSelection);
 
   const handleSubmit = async () => {
     if (!categoryId || !oldSelection || !newSelection) {
@@ -125,21 +120,6 @@ const SwapForm = ({
 
   return (
     <div className="flex flex-col gap-4 pt-4 border-t border-[#2F2F2F]">
-      {/* Mode toggle */}
-      <div className="flex gap-1 bg-[#111] rounded-lg p-0.5">
-        {(['replace', 'reorder'] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => { setSwapMode(m); setOldSelection(''); setNewSelection(''); setError(''); }}
-            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-              swapMode === m ? 'bg-[#2A2A2A] text-white' : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            {m === 'replace' ? '🔄 Replace a Pick' : '↕️ Reorder Picks'}
-          </button>
-        ))}
-      </div>
-
       {/* Category */}
       <div className="flex flex-col gap-1.5">
         <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Category</label>
@@ -155,73 +135,33 @@ const SwapForm = ({
         </select>
       </div>
 
-      {swapMode === 'replace' ? (
-        <>
-          {/* Player to replace */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Replace</label>
-            <select
-              value={oldSelection}
-              onChange={(e) => { setOldSelection(e.target.value); setNewSelection(''); }}
-              disabled={!categoryId}
-              className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
-            >
-              <option value="">Select current pick…</option>
-              {currentPicks.map((sel) => (
-                <option key={sel} value={sel}>{sel}</option>
-              ))}
-            </select>
-          </div>
+      {/* Pick to replace */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Replace</label>
+        <select
+          value={oldSelection}
+          onChange={(e) => { setOldSelection(e.target.value); setNewSelection(''); }}
+          disabled={!categoryId}
+          className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
+        >
+          <option value="">Select current pick…</option>
+          {currentPicks.map((sel) => (
+            <option key={sel} value={sel}>{sel}</option>
+          ))}
+        </select>
+      </div>
 
-          {/* New player */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">With</label>
-            <SearchDrop
-              options={replaceOptions}
-              value={newSelection}
-              onChange={setNewSelection}
-              placeholder={isTeam ? 'Search teams…' : 'Search players…'}
-              disabled={!oldSelection}
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          {/* Reorder: pick first player */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Move</label>
-            <select
-              value={oldSelection}
-              onChange={(e) => { setOldSelection(e.target.value); setNewSelection(''); }}
-              disabled={!categoryId}
-              className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
-            >
-              <option value="">Select a pick…</option>
-              {currentPicks.map((sel, i) => (
-                <option key={sel} value={sel}>#{i + 1} {sel}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Reorder: pick second player to swap with */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Swap position with</label>
-            <select
-              value={newSelection}
-              onChange={(e) => setNewSelection(e.target.value)}
-              disabled={!oldSelection}
-              className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer disabled:text-gray-600 disabled:cursor-not-allowed"
-            >
-              <option value="">Select a pick to swap with…</option>
-              {reorderSecondOptions.map((sel) => {
-                const idx = currentPicks.indexOf(sel);
-                return <option key={sel} value={sel}>#{idx + 1} {sel}</option>;
-              })}
-            </select>
-            <p className="text-gray-600 text-xs">Their positions will be swapped — no player is removed.</p>
-          </div>
-        </>
-      )}
+      {/* New pick */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">With</label>
+        <SearchDrop
+          options={replaceOptions}
+          value={newSelection}
+          onChange={setNewSelection}
+          placeholder={isTeam ? 'Search teams…' : 'Search players…'}
+          disabled={!oldSelection}
+        />
+      </div>
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
 
@@ -248,10 +188,10 @@ const JokerForm = ({
   const [error, setError] = useState('');
   const [jokerCard, { isLoading }] = useJokerCardMutation();
 
-  // Joker only makes sense for player categories (positional scoring)
-  const playerPicks = picks.filter((p) => p.type !== 'team_position');
-  const selectedCat = playerPicks.find((p) => p.categoryId === categoryId);
+  const selectedCat = picks.find((p) => p.categoryId === categoryId);
+  const isTeam = selectedCat?.type === 'team_position';
   const currentPicks = selectedCat?.selections ?? [];
+  const positionCount = isTeam ? 4 : 5;
 
   const handleSubmit = async () => {
     if (!categoryId || !player || predictedPosition < 1) {
@@ -278,15 +218,17 @@ const JokerForm = ({
           className="bg-[#111111] border border-[#2F2F2F] text-gray-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-[#FF6800] cursor-pointer"
         >
           <option value="">Select a category…</option>
-          {playerPicks.map((p) => (
+          {picks.map((p) => (
             <option key={p.categoryId} value={p.categoryId}>{p.categoryName}</option>
           ))}
         </select>
       </div>
 
-      {/* Player to joker */}
+      {/* Player / Team to joker */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">Player</label>
+        <label className="text-gray-400 text-xs font-medium uppercase tracking-wide">
+          {isTeam ? 'Team' : 'Player'}
+        </label>
         <select
           value={player}
           onChange={(e) => setPlayer(e.target.value)}
@@ -307,7 +249,7 @@ const JokerForm = ({
           Exact Position <span className="text-[#FF6800]">+30 pts if correct</span>
         </label>
         <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map((pos) => (
+          {Array.from({ length: positionCount }, (_, i) => i + 1).map((pos) => (
             <button
               key={pos}
               onClick={() => setPredictedPosition(pos)}
@@ -321,7 +263,11 @@ const JokerForm = ({
             </button>
           ))}
         </div>
-        <p className="text-gray-600 text-xs">Pick the exact finishing position you predict for this player.</p>
+        <p className="text-gray-600 text-xs">
+          {isTeam
+            ? 'Pick the exact finishing position you predict for this team.'
+            : 'Pick the exact finishing position you predict for this player.'}
+        </p>
       </div>
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
@@ -350,8 +296,9 @@ const CardTile = ({
   const details = card.details as Record<string, unknown> | null;
   const cardNum = index + 1;
 
-  // For used cards, show the actual type used
   const usedAsSwap = card.used && card.type === 'swap';
+  const jokerCat = picks.find((p) => p.categoryId === (details?.categoryId as string));
+  const jokerIsTeam = jokerCat?.type === 'team_position';
 
   return (
     <div className={`bg-[#1E1E1E] border rounded-xl p-5 flex flex-col gap-3 transition-colors ${
@@ -406,7 +353,7 @@ const CardTile = ({
           ) : (
             <>
               <p><span className="text-gray-600">Category:</span> {categoryMap[details.categoryId as string] ?? details.categoryId as string}</p>
-              <p><span className="text-gray-600">Player:</span> {details.player as string} at position <span className="text-[#FF6800] font-bold">#{details.predictedPosition as number}</span></p>
+              <p><span className="text-gray-600">{jokerIsTeam ? 'Team' : 'Player'}:</span> {details.player as string} at position <span className="text-[#FF6800] font-bold">#{details.predictedPosition as number}</span></p>
             </>
           )}
           {card.usedAt && (
