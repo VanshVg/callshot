@@ -223,9 +223,12 @@ const parseDetails = (raw: string): DetailChip[] => {
     chips.push({ label: `${m[1]} · P${m[2]}`, pts: `+${m[3]}`, isCorrect: true });
   }
 
-  // Joker bonus
-  const jokerM = raw.match(/Joker CORRECT \(\+(\d+)pts\)/);
-  if (jokerM) chips.push({ label: 'Joker Correct', pts: `+${jokerM[1]}`, isJoker: true, isCorrect: true });
+  // Joker bonus chips: "Joker CORRECT: Player @P1 (+30pts)" — one per correct joker
+  const jokerRe = /Joker CORRECT: (.+?) @P(\d+) \(\+(\d+)pts\)/g;
+  let jm: RegExpExecArray | null;
+  while ((jm = jokerRe.exec(raw)) !== null) {
+    chips.push({ label: `🃏 ${jm[1]} @P${jm[2]}`, pts: `+${jm[3]}`, isJoker: true, isCorrect: true });
+  }
 
   // Correct single player pick (exact_match categories)
   if (chips.length === 0 && raw.includes('Correct Player')) {
