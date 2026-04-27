@@ -63,17 +63,17 @@ export const calculateScore = async (
       }
     }
 
-    // Joker bonus
+    // Joker bonus — each used joker card on this category is evaluated independently
     if (strategyCardDoc) {
-      const joker = strategyCardDoc.cards.find(
+      const jokers = strategyCardDoc.cards.filter(
         (c) => c.type === 'joker' && c.used && (c.details as any)?.categoryId === pick.category.toString()
       );
-      if (joker) {
+      for (const joker of jokers) {
         const d = joker.details as any;
         const match = result.rankings.find((r) => r.name.toLowerCase() === d.player.toLowerCase());
         if (match && match.position === d.predictedPosition) {
           pts += JOKER_BONUS;
-          details += `Joker CORRECT (+${JOKER_BONUS}pts)`;
+          details += `Joker CORRECT: ${d.player as string} @P${d.predictedPosition as number} (+${JOKER_BONUS}pts) `;
         }
       }
     }
